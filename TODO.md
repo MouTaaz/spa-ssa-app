@@ -6,4 +6,4 @@
 - [x] Update src/index.css: Replace @import "tailwindcss"; with @tailwind base; @tailwind components; @tailwind utilities; and remove @theme block.
 - [x] Run npm install to update dependencies.
 - [x] Test build locally with npm run build.
-- [ ] Commit changes and redeploy to Vercel.
+- [x] Commit changes and redeploy to Vercel.

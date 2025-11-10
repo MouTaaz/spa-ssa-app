@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-dark: #1e40af;
+  --color-secondary: #64748b;
+  --color-accent: #f97316;
+  --color-success: #16a34a;
+  --color-warning: #eab308;
+  --color-error: #dc2626;
+  --color-background: #ffffff;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+}
+
+* {
+  @apply box-border;
+}
+
+html,
+body,
+#root {
+  @apply h-full w-full;
+}
+
+body {
+  @apply bg-background text-text font-sans;
+}
+
+/* Smooth scrolling */
+html {
+  @apply scroll-smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  @apply w-2 h-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded hover:bg-secondary;
+}
+
+/* Touch-friendly targets */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* PWA specific styles */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}

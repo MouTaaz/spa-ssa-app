@@ -20,9 +20,14 @@ export async function requestNotificationPermission() {
 
 export async function getVapidPublicKey(): Promise<string | null> {
   try {
-    const response = await fetch('/vapid-public-key')
+    const response = await fetch('/vapid-public-key', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
     if (!response.ok) {
-      throw new Error('Failed to fetch VAPID public key')
+      throw new Error(`Failed to fetch VAPID public key: ${response.status}`)
     }
     const data = await response.json()
     return data.publicKey
@@ -260,12 +265,18 @@ async function sendNotificationsViaEdgeFunction(
   userIds: string[]
 ) {
   try {
+    // Get the current session token for authorization
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      throw new Error('No authentication token available')
+    }
+
     // Call the Edge Function to send notifications
-    const response = await fetch('/functions/v1/send-notifications', {
+    const response = await fetch('/send-notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabase.supabaseKey}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         subscriptions,

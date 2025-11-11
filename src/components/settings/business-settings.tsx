@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useBusinessSettings } from "@/hooks/useBusinessSettings";
 import { useSubscription } from "@/hooks/useSubscription";
+import { PushNotificationSetup } from "@/components/onboarding/PushNotificationSetup";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ import {
   Calendar,
   Bell,
   CreditCard,
+  Smartphone,
 } from "lucide-react";
 import type {
   BusinessSettings,
@@ -148,7 +150,7 @@ export function BusinessSettings() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="w-4 h-4" />
             General
@@ -167,6 +169,10 @@ export function BusinessSettings() {
           >
             <Bell className="w-4 h-4" />
             Notifications
+          </TabsTrigger>
+          <TabsTrigger value="push" className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            Push
           </TabsTrigger>
           <TabsTrigger value="blocked" className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
@@ -911,6 +917,10 @@ export function BusinessSettings() {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="push" className="space-y-6">
+          <PushNotificationSetup />
         </TabsContent>
 
         <TabsContent value="blocked" className="space-y-6">

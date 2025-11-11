@@ -5,14 +5,15 @@ import { useNavigate } from "react-router-dom";
 import { OnboardingSuccess } from "./OnboardingSuccess";
 import { SSASetupGuide } from "./SSASetupGuide";
 import { ConnectionVerifier } from "./ConnectionVerifier";
+import { PushNotificationSetup } from "./PushNotificationSetup";
 
 export function OnboardingManager() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<
-    "success" | "guide" | "verify"
+    "success" | "guide" | "push" | "verify"
   >("success");
 
-  const handleNext = (step: "success" | "guide" | "verify") => {
+  const handleNext = (step: "success" | "guide" | "push" | "verify") => {
     setCurrentStep(step);
   };
 
@@ -25,7 +26,11 @@ export function OnboardingManager() {
   }
 
   if (currentStep === "guide") {
-    return <SSASetupGuide onNext={() => handleNext("verify")} />;
+    return <SSASetupGuide onNext={() => handleNext("push")} />;
+  }
+
+  if (currentStep === "push") {
+    return <PushNotificationSetup onNext={() => handleNext("verify")} />;
   }
 
   if (currentStep === "verify") {

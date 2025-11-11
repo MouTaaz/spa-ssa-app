@@ -20,20 +20,17 @@ export async function requestNotificationPermission() {
 
 export async function getVapidPublicKey(): Promise<string | null> {
   try {
-    const response = await fetch('/vapid-public-key', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to fetch VAPID public key: ${response.status}`)
+    const { data, error } = await supabase.functions.invoke('get-vapid-key');
+
+    if (error) {
+      console.error('Failed to fetch VAPID public key:', error);
+      return null;
     }
-    const data = await response.json()
-    return data.publicKey
+
+    return data.publicKey;
   } catch (error) {
-    console.error("Failed to fetch VAPID public key:", error)
-    return null
+    console.error('Error fetching VAPID key:', error);
+    return null;
   }
 }
 

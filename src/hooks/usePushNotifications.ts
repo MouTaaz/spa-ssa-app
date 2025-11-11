@@ -5,6 +5,7 @@ import { requestNotificationPermission, subscribeToPushNotifications, savePushSu
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/useAuth"
 
+
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)

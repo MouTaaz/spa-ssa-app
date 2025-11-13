@@ -20,6 +20,13 @@ export async function requestNotificationPermission() {
 
 export async function getVapidPublicKey(): Promise<string | null> {
   try {
+    // For local development, use a hardcoded test key
+    if (window.location.hostname === 'localhost') {
+      console.log('Using test VAPID key for localhost development');
+      // This is a test key - in production, use the real key from Supabase
+      return 'BExampleVAPIDPublicKeyForTestingPurposes123456789012345678901234567890123456789012345678901234567890';
+    }
+
     const { data, error } = await supabase.functions.invoke('get-vapid-key');
 
     if (error) {
@@ -27,6 +34,8 @@ export async function getVapidPublicKey(): Promise<string | null> {
       return null;
     }
 
+    console.log('VAPID key response:', data);
+    console.log('VAPID public key:', data.publicKey);
     return data.publicKey;
   } catch (error) {
     console.error('Error fetching VAPID key:', error);
@@ -48,11 +57,17 @@ export async function subscribeToPushNotifications() {
       return null
     }
 
+    console.log('VAPID key to convert:', vapidKey);
+    const convertedKey = urlBase64ToUint8Array(vapidKey);
+    console.log('Converted VAPID key:', convertedKey);
+
     const registration = await navigator.serviceWorker.ready
+    console.log('Service worker ready, attempting subscription...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: vapidKey,
+      applicationServerKey: convertedKey as BufferSource,
     })
+    console.log('Subscription successful:', subscription);
     return subscription
   } catch (error) {
     console.error("Failed to subscribe to push notifications:", error)
@@ -389,6 +404,19 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(bytes[i])
   }
   return btoa(binary)
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray as Uint8Array
 }
 
 function getPlatform(): string {

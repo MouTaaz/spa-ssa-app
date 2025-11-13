@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { useBusinessSettings } from "@/hooks/useBusinessSettings";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PushNotificationSetup } from "@/components/onboarding/PushNotificationSetup";
@@ -920,7 +919,7 @@ export function BusinessSettings() {
         </TabsContent>
 
         <TabsContent value="push" className="space-y-6">
-          <PushNotificationSetup />
+          <PushNotificationSetup onNext={() => {}} />
         </TabsContent>
 
         <TabsContent value="blocked" className="space-y-6">

@@ -27,7 +27,8 @@ export async function getVapidPublicKey(): Promise<string | null> {
       return 'BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc';
     }
 
-    const { data, error } = await supabase.functions.invoke('get-vapid-key');
+    // Use the consolidated ssa-appointments function for VAPID key
+    const { data, error } = await supabase.functions.invoke('ssa-appointments/vapid-public-key');
 
     if (error) {
       console.error('Failed to fetch VAPID public key:', error);
@@ -283,7 +284,7 @@ async function sendNotificationsViaEdgeFunction(
       throw new Error('No authentication token available')
     }
 
-    // Call the Edge Function to send notifications
+    // Call the consolidated ssa-appointments function to send notifications
     const response = await fetch('/send-notifications', {
       method: 'POST',
       headers: {
@@ -309,7 +310,7 @@ async function sendNotificationsViaEdgeFunction(
     await logNotifications(userIds, businessId, notificationData, result.results)
 
   } catch (error) {
-    console.error('Failed to send notifications via Edge Function:', error)
+    console.error('Failed to send notifications via consolidated Edge Function:', error)
     // Fallback: try to send directly (limited functionality)
     await sendNotificationsDirectly(subscriptions, notificationData, businessId, userIds)
   }
@@ -321,12 +322,13 @@ async function sendNotificationsDirectly(
   businessId: string,
   userIds: string[]
 ) {
-  console.log('Attempting direct notification sending via Edge Function')
+  console.log('Attempting direct notification sending via consolidated Edge Function')
 
   const results = []
 
   for (const subscription of subscriptions) {
     try {
+      // Use the consolidated ssa-appointments function for sending notifications
       const response = await supabase.functions.invoke('send-push-notification', {
         body: {
           subscription,

@@ -1,2 +1,6 @@
 - [x] Update TabsList className to use flex with overflow-x-auto on mobile and grid-cols-7 on larger screens
 - [x] Add flex-shrink-0 to TabsTrigger classes for proper mobile tab behavior
+- [x] Consolidate Supabase Edge Functions into single ssa-appointments function
+- [x] Remove redundant get-vapid-key, send-push-notification, and vapid-public-key functions
+- [x] Update frontend code to use consolidated ssa-appointments function for VAPID keys
+- [x] Update notification sending logic to use consolidated function

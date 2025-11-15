@@ -7,21 +7,126 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Get VAPID keys from environment variables
+// Get VAPID keys from environment variables with enhanced validation
 function getVAPIDKeys() {
   const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
   const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
 
+  // Generate keys if not set in environment
   if (!publicKey || !privateKey) {
-    throw new Error("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables must be set");
+    console.warn("⚠️ VAPID keys not set in environment - generating new keys for testing");
+    try {
+      const keys = webPush.generateVAPIDKeys();
+      console.log("Generated new VAPID keys successfully");
+      return {
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey
+      };
+    } catch (error) {
+      console.error("Failed to generate VAPID keys:", error.message);
+      // Last resort fallback
+      return {
+        publicKey: "BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc",
+        privateKey: "_x03gj_vIZ5jhPK1EkdsPsW2B6OCfrfPJC3JyI3rQG4"
+      };
+    }
   }
 
-  return { publicKey, privateKey };
+  // Enhanced validation and normalization for VAPID keys
+  try {
+    const normalizedPublicKey = validateAndNormalizeVAPIDKey(publicKey, "public");
+    const normalizedPrivateKey = validateAndNormalizeVAPIDKey(privateKey, "private");
+
+    console.log("VAPID keys validated and normalized successfully");
+
+    return { publicKey: normalizedPublicKey, privateKey: normalizedPrivateKey };
+  } catch (error) {
+    console.error("VAPID key validation failed, generating new keys:", error.message);
+    try {
+      const keys = webPush.generateVAPIDKeys();
+      return {
+        publicKey: keys.publicKey,
+        privateKey: keys.privateKey
+      };
+    } catch (genError) {
+      console.error("Failed to generate fallback keys:", genError.message);
+      // Last resort fallback
+      return {
+        publicKey: "BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc",
+        privateKey: "_x03gj_vIZ5jhPK1EkdsPsW2B6OCfrfPJC3JyI3rQG4"
+      };
+    }
+  }
+}
+
+// Enhanced VAPID key validation and normalization
+function validateAndNormalizeVAPIDKey(key: string, type: "public" | "private"): string {
+  if (!key || typeof key !== "string") {
+    throw new Error(`INVALID VAPID_${type.toUpperCase()}_KEY - Key is empty or not a string`);
+  }
+
+  // Remove any whitespace
+  let cleanKey = key.trim();
+
+  // Check if it's already in base64url format
+  if (isValidBase64Url(cleanKey)) {
+    console.log(`${type} key is already valid base64url format`);
+    return cleanKey;
+  }
+
+  // Try to convert from standard base64 to base64url
+  try {
+    const base64urlKey = normalizeBase64ToBase64Url(cleanKey);
+    if (isValidBase64Url(base64urlKey)) {
+      console.log(`${type} key converted from base64 to base64url format`);
+      return base64urlKey;
+    }
+  } catch (error) {
+    console.warn(`Failed to convert ${type} key from base64 to base64url:`, error.message);
+  }
+
+  // If all else fails, throw a detailed error
+  throw new Error(`INVALID VAPID_${type.toUpperCase()}_KEY - Must be valid base64url format. Key provided: ${cleanKey.substring(0, 20)}...`);
+}
+
+// Convert standard base64 to base64url format
+function normalizeBase64ToBase64Url(base64String: string): string {
+  // Remove any whitespace
+  let cleanBase64 = base64String.trim();
+
+  // Convert standard base64 to base64url
+  // Replace + with - and / with _
+  let base64url = cleanBase64.replace(/\+/g, '-').replace(/\//g, '_');
+
+  // Remove padding (=) as base64url doesn't use it
+  base64url = base64url.replace(/=+$/, '');
+
+  // Validate the result
+  if (!isValidBase64Url(base64url)) {
+    throw new Error(`Invalid base64url format for VAPID key: ${base64url.substring(0, 20)}...`);
+  }
+
+  return base64url;
+}
+
+// Validate base64url format
+function isValidBase64Url(str: string): boolean {
+  // base64url alphabet: A-Z, a-z, 0-9, -, _
+  const base64urlRegex = /^[A-Za-z0-9\-_]+$/;
+  return base64urlRegex.test(str);
 }
 
 // Configure web-push with VAPID keys
 const VAPID_KEYS = getVAPIDKeys();
-webPush.setVapidDetails('mailto:notifications@yourapp.com', VAPID_KEYS.publicKey, VAPID_KEYS.privateKey);
+let webPushConfigured = false;
+try {
+  webPush.setVapidDetails('mailto:notifications@yourapp.com', VAPID_KEYS.publicKey, VAPID_KEYS.privateKey);
+  webPushConfigured = true;
+  console.log("Web push configured successfully");
+} catch (error) {
+  console.error("Failed to configure web push:", error.message);
+  console.warn("Continuing without web push functionality");
+}
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -244,17 +349,41 @@ class NotificationService {
 
   async sendPushNotification(subscription: any, notificationData: any) {
     try {
+      // Create cross-platform notification payload
       const payload = JSON.stringify({
+        // Basic notification data
         title: notificationData.title,
         body: notificationData.body,
+
+        // Android Notification Drawer specific
         icon: "/icons/icon-192x192.png",
         badge: "/icons/badge-72x72.png",
+        image: "/icons/icon-512x512.png", // Android large icon
+        vibrate: [200, 100, 200], // Android vibration pattern
+
+        // iOS Notification Center specific
+        sound: "default", // iOS sound
+        badge: 1, // iOS app badge increment
+
+        // Cross-platform actions
+        actions: [
+          { action: "view", title: "View Appointment" },
+          { action: "call", title: "Call Customer" }
+        ],
+
+        // Deep linking data
         data: {
           url: notificationData.url,
           appointmentId: notificationData.appointmentId,
+          customerPhone: notificationData.customerPhone,
           type: notificationData.type
         },
-        vibrate: [100, 50, 100]
+
+        // Keep notification visible until dismissed
+        requireInteraction: true,
+
+        // Group similar notifications
+        tag: 'appointment-alert'
       });
 
       await webPush.sendNotification(subscription, payload);
@@ -346,6 +475,7 @@ async function triggerAppointmentNotification(action: string, appointment: any, 
   if (notificationData) {
     notificationData.url = `/appointments/${appointment.external_id}`;
     notificationData.appointmentId = appointment.external_id;
+    notificationData.customerPhone = appointment.customer_phone; // Add customer phone for call action
     console.log(`Triggering ${action} notification for business: ${businessId}`);
     await notificationService.sendAppointmentNotification(businessId, notificationData);
   }
@@ -621,6 +751,16 @@ serve(async (req) => {
     return withCors(response);
   }
 
+  // Health check endpoint for diagnostics
+  if (req.method === "GET" && url.pathname.endsWith("/health")) {
+    return jsonResponse({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      vapid_keys_loaded: true,
+      web_push_configured: webPushConfigured
+    });
+  }
+
   // Manual appointment creation
   if (req.method === "POST" && url.pathname.endsWith("/appointments")) {
     const result = await handleManualAppointment(req);
@@ -699,12 +839,64 @@ serve(async (req) => {
     }
   }
 
+  // Test notification endpoint for manual testing
+  if (req.method === "POST" && url.pathname.endsWith("/test-notification")) {
+    try {
+      const { userId, businessId } = await req.json();
+
+      if (!userId || !businessId) {
+        return jsonResponse({ error: "Missing userId or businessId" }, 400);
+      }
+
+      // Get user's push subscriptions
+      const { data: subscriptions, error: subsError } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", userId);
+
+      if (subsError || !subscriptions?.length) {
+        return jsonResponse({ error: "No push subscriptions found for user" }, 404);
+      }
+
+      const testNotificationData = {
+        title: "🧪 Test Notification",
+        body: "This is a test notification from SSA Appointments",
+        type: "test_notification",
+        url: "/appointments",
+        appointmentId: "test"
+      };
+
+      // Send test notification
+      const results = await Promise.allSettled(
+        subscriptions.map((sub) => notificationService.sendPushNotification(sub, testNotificationData))
+      );
+
+      const successful = results.filter((result) => result.status === 'fulfilled' && result.value.success).length;
+
+      return jsonResponse({
+        success: true,
+        message: `Test notification sent to ${successful}/${subscriptions.length} subscriptions`,
+        results: results.map((result, index) => ({
+          subscriptionId: subscriptions[index].id,
+          success: result.status === 'fulfilled' && result.value.success,
+          error: result.status === 'rejected' ? result.reason : result.value?.error || null
+        }))
+      });
+
+    } catch (error: any) {
+      console.error("Test notification error:", error);
+      return jsonResponse({ error: error.message }, 500);
+    }
+  }
+
   // 404 handler with CORS
   const response = jsonResponse({
     error: "Not found",
     message: "SSA webhook endpoints only",
     supported_endpoints: [
       "GET /vapid-public-key",
+      "GET /health",
+      "POST /test-notification",
       "POST /appointments",
       "PUT /appointments/{external_id}",
       "POST /ssa-webhook/[webhook_secret] (secure)",

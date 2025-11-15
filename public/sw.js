@@ -53,6 +53,9 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
+  // Skip chrome-extension requests as they are not supported by Cache API
+  if (url.protocol === "chrome-extension:") return;
+
   // Network First for API calls
   if (url.pathname.includes("/api/") || url.hostname.includes("supabase.co")) {
     event.respondWith(

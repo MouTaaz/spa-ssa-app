@@ -20,11 +20,11 @@ export async function requestNotificationPermission() {
 
 export async function getVapidPublicKey(): Promise<string | null> {
   try {
-    // For local development, use a hardcoded test key
+    // For local development, use the real VAPID key (not test key)
     if (window.location.hostname === 'localhost') {
-      console.log('Using test VAPID key for localhost development');
-      // This is a test key - in production, use the real key from Supabase
-      return 'BExampleVAPIDPublicKeyForTestingPurposes123456789012345678901234567890123456789012345678901234567890';
+      console.log('Using real VAPID key for localhost development');
+      // Use the real VAPID key generated from web-push
+      return 'BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc';
     }
 
     const { data, error } = await supabase.functions.invoke('get-vapid-key');
@@ -321,27 +321,23 @@ async function sendNotificationsDirectly(
   businessId: string,
   userIds: string[]
 ) {
-  console.log('Attempting direct notification sending (fallback)')
+  console.log('Attempting direct notification sending via Edge Function')
 
   const results = []
 
   for (const subscription of subscriptions) {
     try {
-      const response = await fetch('/send-push-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await supabase.functions.invoke('send-push-notification', {
+        body: {
           subscription,
           notificationData,
-        }),
+        },
       })
 
       results.push({
-        success: response.ok,
+        success: !response.error,
         subscriptionId: subscription.id,
-        error: response.ok ? null : `HTTP ${response.status}`,
+        error: response.error ? response.error.message : null,
       })
     } catch (error: any) {
       results.push({

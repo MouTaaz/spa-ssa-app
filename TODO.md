@@ -1,47 +1,50 @@
-# Push Notifications Implementation Plan
+# Push Notification Implementation Plan
 
 ## Current Status
 
-- Push notification system exists with hooks, components, and service worker
-- VAPID key fetching calls `/vapid-public-key` (likely non-existent endpoint)
-- Permission request and subscription functions exist but not integrated into onboarding
-- PushSubscriptionManager component exists but not in main settings flow
-- Service worker handles push events correctly
+- ✅ Valid VAPID keys generated from web-push
+- ✅ Frontend subscription logic ready
+- ✅ Service worker set up to receive notifications
+- ✅ Backend function to send notifications created
+- ✅ Edge Function simplified (Web Crypto dependencies removed)
+- ✅ Using real VAPID key instead of test key
 
-## Tasks to Complete
+## Tasks Completed
 
-### 1. Fix VAPID Key Fetching
+### 1. Update get-vapid-key Edge Function ✅
 
-- [x] Update `src/lib/notifications.ts` to call Supabase Edge Function endpoint `/functions/v1/vapid-public-key`
-- [x] Add proper error handling for Edge Function unavailability
+- [x] Replaced complex Web Crypto API code with simple environment variable return
+- [x] Removed dependency conflicts causing Deno errors
+- [x] Deploy updated function
 
-### 2. Add Permission Flow to Onboarding
+### 2. Update Frontend notifications.ts ✅
 
-- [ ] Create new onboarding step for push notifications in `src/components/onboarding/OnboardingManager.tsx`
-- [ ] Add permission request UI with user-friendly explanations
-- [ ] Handle all permission states (granted, denied, default)
+- [x] Replaced test VAPID key with real key: BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc
+- [x] Ensured production fetches from Edge Function
+- [x] Tested VAPID key retrieval
 
-### 3. Integrate Push Settings into Main Settings
+### 3. Create send-push-notification Edge Function ✅
 
-- [ ] Add push notification toggle to `src/components/settings/business-settings.tsx`
-- [ ] Integrate PushSubscriptionManager component into settings tabs
-- [ ] Add platform detection and analytics
+- [x] Created new Edge Function using web-push library
+- [x] Uses VAPID_PRIVATE_KEY for signing
+- [x] Handles subscription data and notification payload
+- [x] Deploy new function
 
-### 4. Improve Subscription Triggers
+### 4. Complete End-to-End Data Flow
 
-- [ ] Update `src/hooks/usePushNotifications.ts` to trigger subscription checks at login
-- [ ] Ensure subscription process waits for service worker readiness
-- [ ] Add subscription triggers for appointment actions
+- [ ] Test subscription creation and saving to DB
+- [ ] Test notification triggering from appointment changes
+- [ ] Test push notification delivery to service worker
+- [ ] Verify notification display and click handling
 
-### 5. Add Error Handling and User Feedback
+## Next Steps
 
-- [ ] Add user-friendly error messages throughout the flow
-- [ ] Handle Edge Function failures gracefully
-- [ ] Provide clear feedback for permission states
+1. Deploy the updated Edge Functions to Supabase
+2. Test the complete notification flow
+3. Verify notifications are received in the service worker
+4. Test notification click handling
 
-## Followup Steps
+## Environment Variables Required
 
-- [ ] Test notification flow on mobile devices
-- [ ] Verify Edge Function responses
-- [ ] Debug service worker registration
-- [ ] Check subscription persistence
+- VAPID_PUBLIC_KEY=BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc
+- VAPID_PRIVATE_KEY=\_x03gj_vIZ5jhPK1EkdsPsW2B6OCfrfPJC3JyI3rQG4

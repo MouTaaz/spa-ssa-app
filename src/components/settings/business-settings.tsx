@@ -149,35 +149,53 @@ export function BusinessSettings() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="general" className="flex items-center gap-2">
+        <TabsList className="flex w-full overflow-x-auto md:grid md:grid-cols-7">
+          <TabsTrigger
+            value="general"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <Settings className="w-4 h-4" />
             General
           </TabsTrigger>
-          <TabsTrigger value="services" className="flex items-center gap-2">
+          <TabsTrigger
+            value="services"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <Briefcase className="w-4 h-4" />
             Services
           </TabsTrigger>
-          <TabsTrigger value="hours" className="flex items-center gap-2">
+          <TabsTrigger
+            value="hours"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <Clock className="w-4 h-4" />
             Hours
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 flex-shrink-0"
           >
             <Bell className="w-4 h-4" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="push" className="flex items-center gap-2">
+          <TabsTrigger
+            value="push"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <Smartphone className="w-4 h-4" />
             Push
           </TabsTrigger>
-          <TabsTrigger value="blocked" className="flex items-center gap-2">
+          <TabsTrigger
+            value="blocked"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <Calendar className="w-4 h-4" />
             Blocked
           </TabsTrigger>
-          <TabsTrigger value="subscription" className="flex items-center gap-2">
+          <TabsTrigger
+            value="subscription"
+            className="flex items-center gap-2 flex-shrink-0"
+          >
             <CreditCard className="w-4 h-4" />
             Subscription
           </TabsTrigger>

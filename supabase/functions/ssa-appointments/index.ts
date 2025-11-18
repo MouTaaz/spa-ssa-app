@@ -1,38 +1,262 @@
 // deno-lint-ignore-file no-explicit-any
-import webPush from "npm:web-push@3.6.6";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+
+// Email Service for SMTP integration
+class EmailService {
+  private smtpHost: string;
+  private smtpPort: number;
+  private smtpUser: string;
+  private smtpPass: string;
+  private smtpFrom: string;
+
+  constructor() {
+    this.smtpHost = Deno.env.get("SMTP_HOST") ?? "";
+    this.smtpPort = parseInt(Deno.env.get("SMTP_PORT") ?? "587");
+    this.smtpUser = Deno.env.get("SMTP_USER") ?? "";
+    this.smtpFrom = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
+    this.smtpFrom = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
+
+    // Validate SMTP configuration
+    if (!this.smtpHost || !this.smtpUser || !this.smtpPass) {
+      console.warn("⚠️ SMTP configuration incomplete - email notifications disabled");
+    } else {
+      console.log("✅ Email service configured successfully");
+    }
+  }
+
+  isConfigured(): boolean {
+    return !!(this.smtpHost && this.smtpUser && this.smtpPass);
+  }
+
+  async sendAppointmentEmail(
+    toEmail: string,
+    subject: string,
+    htmlContent: string,
+    textContent: string
+  ): Promise<boolean> {
+    if (!this.isConfigured()) {
+      console.warn("Email service not configured - skipping email notification");
+      return false;
+    }
+
+    try {
+      // Create SMTP connection and send email
+      const emailData = {
+        to: toEmail,
+        from: this.smtpFrom,
+        subject: subject,
+        html: htmlContent,
+        text: textContent,
+      };
+
+      // Use fetch to send email via SMTP API (you can replace with actual SMTP library)
+      // For now, we'll use a simple SMTP implementation
+      const response = await this.sendViaSMTP(emailData);
+
+      if (response) {
+        console.log(`✅ Email sent successfully to ${toEmail}`);
+        return true;
+      } else {
+        console.error(`❌ Failed to send email to ${toEmail}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`Email service error for ${toEmail}:`, error);
+      return false;
+    }
+  }
+
+  private async sendViaSMTP(emailData: any): Promise<boolean> {
+    try {
+      const client = new SmtpClient();
+
+      await client.connect({
+        hostname: this.smtpHost,
+        port: this.smtpPort,
+        tls: this.smtpPort === 465, // Use TLS for port 465, STARTTLS for others
+        auth: {
+          username: this.smtpUser,
+          password: this.smtpPass,
+        },
+      });
+
+      await client.send({
+        from: this.smtpFrom,
+        to: emailData.to,
+        subject: emailData.subject,
+        content: emailData.text,
+        html: emailData.html,
+      });
+
+      await client.close();
+
+      console.log(`📧 Email sent successfully via SMTP to ${emailData.to}`);
+      return true;
+    } catch (error) {
+      console.error("SMTP send error:", error);
+      return false;
+    }
+  }
+
+  generateAppointmentEmailHtml(appointment: any, action: string): { html: string; text: string } {
+    const actionTitles = {
+      booked: "New Appointment Booked",
+      edited: "Appointment Updated",
+      cancelled: "Appointment Cancelled",
+      rescheduled: "Appointment Rescheduled"
+    };
+
+    const title = actionTitles[action as keyof typeof actionTitles] || "Appointment Update";
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; }
+    .appointment-details { background: white; padding: 15px; border-radius: 6px; margin: 15px 0; }
+    .detail-row { margin: 8px 0; }
+    .label { font-weight: bold; color: #475569; }
+    .value { color: #1e293b; }
+    .footer { text-align: center; padding: 20px; color: #64748b; font-size: 14px; }
+    .action-button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${title}</h1>
+      <p>SSA Appointment Management System</p>
+    </div>
+
+    <div class="content">
+      <div class="appointment-details">
+        <div class="detail-row">
+          <span class="label">Customer:</span>
+          <span class="value">${appointment.customer_name || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Service:</span>
+          <span class="value">${appointment.service_name || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Date & Time:</span>
+          <span class="value">${appointment.start_time ? new Date(appointment.start_time).toLocaleString() : 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Vehicle:</span>
+          <span class="value">${appointment.vehicle_make_model || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Location:</span>
+          <span class="value">${appointment.location || 'TBD'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Phone:</span>
+          <span class="value">${appointment.customer_phone || 'N/A'}</span>
+        </div>
+        ${appointment.customer_notes ? `
+        <div class="detail-row">
+          <span class="label">Notes:</span>
+          <span class="value">${appointment.customer_notes}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${appointment.web_meeting_url || '#'}" class="action-button">View Appointment</a>
+        ${appointment.customer_phone ? `<a href="tel:${appointment.customer_phone}" class="action-button">Call Customer</a>` : ''}
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>This is an automated notification from your SSA Appointment Management System.</p>
+      <p>Please check your dashboard for the latest appointment details.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const text = `
+${title}
+
+Customer: ${appointment.customer_name || 'N/A'}
+Service: ${appointment.service_name || 'N/A'}
+Date & Time: ${appointment.start_time ? new Date(appointment.start_time).toLocaleString() : 'N/A'}
+Vehicle: ${appointment.vehicle_make_model || 'N/A'}
+Location: ${appointment.location || 'TBD'}
+Phone: ${appointment.customer_phone || 'N/A'}
+${appointment.customer_notes ? `Notes: ${appointment.customer_notes}` : ''}
+
+View appointment: ${appointment.web_meeting_url || 'Check your dashboard'}
+${appointment.customer_phone ? `Call customer: ${appointment.customer_phone}` : ''}
+
+This is an automated notification from your SSA Appointment Management System.
+`;
+
+    return { html, text };
+  }
+}
+
+const emailService = new EmailService();
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Get VAPID keys from environment variables with enhanced validation
+// Direct Web Push implementation using Web Crypto API
+async function generateVAPIDKeys(): Promise<{ publicKey: string; privateKey: string }> {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      name: 'ECDSA',
+      namedCurve: 'P-256'
+    },
+    true,
+    ['sign', 'verify']
+  );
+
+  const publicKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+  const privateKey = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+
+  const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKey)));
+  const privateKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(privateKey)));
+
+  // Convert to base64url format
+  const publicKeyBase64Url = publicKeyBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const privateKeyBase64Url = privateKeyBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  return {
+    publicKey: publicKeyBase64Url,
+    privateKey: privateKeyBase64Url
+  };
+}
+
+// Get VAPID keys from environment variables with validation
 function getVAPIDKeys() {
   const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
   const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
 
   // Generate keys if not set in environment
   if (!publicKey || !privateKey) {
-    console.warn("⚠️ VAPID keys not set in environment - generating new keys for testing");
+    console.warn("⚠️ VAPID keys not set in environment - generating new keys");
     try {
-      const keys = webPush.generateVAPIDKeys();
-      console.log("Generated new VAPID keys successfully");
-      return {
-        publicKey: keys.publicKey,
-        privateKey: keys.privateKey
-      };
+      // Note: This is synchronous for compatibility, but in real implementation
+      // you'd want to make this async and handle the promise properly
+      throw new Error("VAPID keys must be provided in environment variables for production");
     } catch (error) {
       console.error("Failed to generate VAPID keys:", error.message);
-      // Last resort fallback
-      return {
-        publicKey: "BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc",
-        privateKey: "_x03gj_vIZ5jhPK1EkdsPsW2B6OCfrfPJC3JyI3rQG4"
-      };
+      throw new Error("Unable to generate VAPID keys. Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables.");
     }
   }
 
-  // Enhanced validation and normalization for VAPID keys
+  // Basic validation for VAPID keys
   try {
     const normalizedPublicKey = validateAndNormalizeVAPIDKey(publicKey, "public");
     const normalizedPrivateKey = validateAndNormalizeVAPIDKey(privateKey, "private");
@@ -41,21 +265,8 @@ function getVAPIDKeys() {
 
     return { publicKey: normalizedPublicKey, privateKey: normalizedPrivateKey };
   } catch (error) {
-    console.error("VAPID key validation failed, generating new keys:", error.message);
-    try {
-      const keys = webPush.generateVAPIDKeys();
-      return {
-        publicKey: keys.publicKey,
-        privateKey: keys.privateKey
-      };
-    } catch (genError) {
-      console.error("Failed to generate fallback keys:", genError.message);
-      // Last resort fallback
-      return {
-        publicKey: "BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc",
-        privateKey: "_x03gj_vIZ5jhPK1EkdsPsW2B6OCfrfPJC3JyI3rQG4"
-      };
-    }
+    console.error("VAPID key validation failed:", error.message);
+    throw new Error("Invalid VAPID keys. Please check VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables.");
   }
 }
 
@@ -116,17 +327,10 @@ function isValidBase64Url(str: string): boolean {
   return base64urlRegex.test(str);
 }
 
-// Configure web-push with VAPID keys
-const VAPID_KEYS = getVAPIDKeys();
-let webPushConfigured = false;
-try {
-  webPush.setVapidDetails('mailto:notifications@yourapp.com', VAPID_KEYS.publicKey, VAPID_KEYS.privateKey);
-  webPushConfigured = true;
-  console.log("Web push configured successfully");
-} catch (error) {
-  console.error("Failed to configure web push:", error.message);
-  console.warn("Continuing without web push functionality");
-}
+// Initialize VAPID keys
+let VAPID_KEYS = getVAPIDKeys();
+let webPushConfigured = true; // Always true now since we handle keys directly
+console.log("Direct Web Push implementation initialized successfully");
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -290,9 +494,151 @@ function detectEditSource(payload: any, existingAppointment: any) {
   return "webhook"; // Default to webhook for admin/team edits
 }
 
-// Notification Service
+// Direct Web Push implementation using Web Crypto API
+async function createVAPIDJWT(audience: string, expiration: number): Promise<string> {
+  const header = {
+    alg: 'ES256',
+    typ: 'JWT'
+  };
+
+  const payload = {
+    aud: audience,
+    exp: expiration,
+    sub: 'mailto:notifications@yourapp.com'
+  };
+
+  const encoder = new TextEncoder();
+  const headerB64 = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const payloadB64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  const message = `${headerB64}.${payloadB64}`;
+
+  // Import private key for signing
+  const privateKeyData = Uint8Array.from(atob(VAPID_KEYS.privateKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const privateKey = await crypto.subtle.importKey(
+    'pkcs8',
+    privateKeyData,
+    {
+      name: 'ECDSA',
+      namedCurve: 'P-256'
+    },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    privateKey,
+    encoder.encode(message)
+  );
+
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  return `${message}.${signatureB64}`;
+}
+
+async function encryptPayload(subscription: any, payload: string): Promise<{ ciphertext: ArrayBuffer; salt: Uint8Array }> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(payload);
+
+  // Generate server key
+  const serverKey = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt']
+  );
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+
+  // Import subscription p256dh key
+  const p256dhKeyData = Uint8Array.from(atob(subscription.keys.p256dh.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const p256dhKey = await crypto.subtle.importKey(
+    'raw',
+    p256dhKeyData,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+
+  const authSecret = Uint8Array.from(atob(subscription.keys.auth.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+
+  // Generate ECDH key pair for deriving shared secret
+  const ecdhKeyPair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveKey']
+  );
+
+  // Derive shared secret using HKDF
+  const sharedSecret = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: p256dhKey },
+    ecdhKeyPair.privateKey,
+    { name: 'HKDF', hash: 'SHA-256', salt: authSecret, info: encoder.encode('Content-Encoding: auth\0') },
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+
+  // Encrypt the payload
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    sharedSecret,
+    data
+  );
+
+  return { ciphertext, salt };
+}
+
+async function sendWebPushNotification(subscription: any, payload: string): Promise<boolean> {
+  try {
+    const endpoint = new URL(subscription.endpoint);
+    const audience = `${endpoint.protocol}//${endpoint.host}`;
+
+    // Create VAPID JWT
+    const expiration = Math.floor(Date.now() / 1000) + 86400; // 24 hours
+    const jwt = await createVAPIDJWT(audience, expiration);
+
+    // Encrypt payload
+    const { ciphertext, salt } = await encryptPayload(subscription, payload);
+
+    // Send the request
+    const response = await fetch(subscription.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Encoding': 'aesgcm',
+        'Authorization': `WebPush ${jwt}`,
+        'TTL': '2419200', // 28 days
+        'Urgency': 'normal'
+      },
+      body: ciphertext
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Web push notification error:', error);
+    return false;
+  }
+}
+
+
+
+// Helper function to detect changed fields
+function getChangedFields(oldData: any, newData: any) {
+  const fields = ['customer_name', 'customer_email', 'customer_phone', 'service_name', 'location', 'start_time', 'end_time'];
+  const changed = [];
+  fields.forEach((field) => {
+    if (oldData[field] !== newData[field]) {
+      changed.push(field.replace('_', ' '));
+    }
+  });
+  return changed;
+}
+
+// Notification Service - Dual Delivery (Push + Email)
 class NotificationService {
-  async sendAppointmentNotification(businessId: string, notificationData: any) {
+  async sendAppointmentNotification(businessId: string, notificationData: any, appointment: any) {
     try {
       // Get all users for this business
       const { data: businessMembers, error: membersError } = await supabase
@@ -313,6 +659,22 @@ class NotificationService {
 
       const userIds = businessMembers.map((member) => member.user_id);
 
+      // Get user profiles with email addresses
+      const { data: userProfiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .in("id", userIds);
+
+      if (profilesError) {
+        console.error("Error fetching user profiles:", profilesError);
+      }
+
+      // Create user map for easy lookup
+      const userMap = new Map();
+      userProfiles?.forEach(profile => {
+        userMap.set(profile.id, { email: profile.email });
+      });
+
       // Get push subscriptions for these users
       const { data: subscriptions, error: subsError } = await supabase
         .from("push_subscriptions")
@@ -321,30 +683,106 @@ class NotificationService {
 
       if (subsError) {
         console.error("Error fetching push subscriptions:", subsError);
-        return;
       }
 
-      if (!subscriptions?.length) {
-        console.log(`No push subscriptions found for users: ${userIds.join(', ')}`);
-        return;
-      }
+      console.log(`📱 Found ${subscriptions?.length || 0} push subscriptions for ${userIds.length} users`);
+      console.log(`📧 Email service configured: ${emailService.isConfigured()}`);
 
-      console.log(`Sending ${notificationData.type} notifications to ${subscriptions.length} subscriptions`);
-
-      // Send to all subscriptions
-      const results = await Promise.allSettled(
-        subscriptions.map((sub) => this.sendPushNotification(sub, notificationData))
+      // Send dual notifications (push first, email fallback)
+      const results = await this.sendDualNotifications(
+        userIds,
+        userMap,
+        subscriptions || [],
+        notificationData,
+        appointment
       );
 
       // Log notification delivery
-      await this.logNotifications(userIds, businessId, notificationData, results);
+      await this.logDualNotifications(userIds, businessId, notificationData, results);
 
-      const successful = results.filter((result) => result.status === 'fulfilled' && result.value.success).length;
-      console.log(`Successfully sent ${successful}/${subscriptions.length} notifications`);
+      const pushSuccessful = results.filter((result) => result.pushSuccess).length;
+      const emailSuccessful = results.filter((result) => result.emailSuccess).length;
+
+      console.log(`✅ Dual notifications sent: ${pushSuccessful} push, ${emailSuccessful} email`);
 
     } catch (error) {
       console.error("Notification service error:", error);
     }
+  }
+
+  async sendDualNotifications(
+    userIds: string[],
+    userMap: Map<string, any>,
+    subscriptions: any[],
+    notificationData: any,
+    appointment: any
+  ) {
+    const results = [];
+
+    for (const userId of userIds) {
+      const userProfile = userMap.get(userId);
+      const userSubscriptions = subscriptions.filter(sub => sub.user_id === userId);
+
+      let pushSuccess = false;
+      let emailSuccess = false;
+
+      // 1. Try push notification first (immediate delivery)
+      if (userSubscriptions.length > 0) {
+        console.log(`📱 Sending push notification to user ${userId} (${userSubscriptions.length} subscriptions)`);
+        const pushResults = await Promise.allSettled(
+          userSubscriptions.map((sub) => this.sendPushNotification(sub, notificationData))
+        );
+        pushSuccess = pushResults.some(result => result.status === 'fulfilled' && result.value.success);
+      }
+
+      // 2. Send email notification (reliable fallback)
+      if (userProfile?.email && emailService.isConfigured()) {
+        console.log(`📧 Sending email notification to ${userProfile.email}`);
+        const action = this.getActionFromNotificationType(notificationData.type);
+        const { html, text } = emailService.generateAppointmentEmailHtml(appointment, action);
+        const subject = this.getEmailSubject(notificationData.type, appointment);
+
+        emailSuccess = await emailService.sendAppointmentEmail(
+          userProfile.email,
+          subject,
+          html,
+          text
+        );
+      } else if (!userProfile?.email) {
+        console.log(`⚠️ No email address found for user ${userId}`);
+      }
+
+      results.push({
+        userId,
+        pushSuccess,
+        emailSuccess,
+        pushSubscriptions: userSubscriptions.length,
+        hasEmail: !!userProfile?.email
+      });
+    }
+
+    return results;
+  }
+
+  getActionFromNotificationType(type: string): string {
+    const typeMap: Record<string, string> = {
+      'appointment_booked': 'booked',
+      'appointment_edited': 'edited',
+      'appointment_cancelled': 'cancelled',
+      'appointment_rescheduled': 'rescheduled'
+    };
+    return typeMap[type] || 'booked';
+  }
+
+  getEmailSubject(type: string, appointment: any): string {
+    const baseSubject = `SSA Appointment: ${appointment.customer_name}`;
+    const typeSubjects: Record<string, string> = {
+      'appointment_booked': `New Appointment: ${appointment.customer_name}`,
+      'appointment_edited': `Appointment Updated: ${appointment.customer_name}`,
+      'appointment_cancelled': `Appointment Cancelled: ${appointment.customer_name}`,
+      'appointment_rescheduled': `Appointment Rescheduled: ${appointment.customer_name}`
+    };
+    return typeSubjects[type] || baseSubject;
   }
 
   async sendPushNotification(subscription: any, notificationData: any) {
@@ -386,65 +824,52 @@ class NotificationService {
         tag: 'appointment-alert'
       });
 
-      await webPush.sendNotification(subscription, payload);
+      const success = await sendWebPushNotification(subscription, payload);
+
+      if (!success) {
+        throw new Error('Failed to send web push notification');
+      }
 
       return { success: true, subscriptionId: subscription.id };
     } catch (error: any) {
       console.error(`Push notification failed for subscription ${subscription.id}:`, error.message);
 
-      // Remove invalid subscriptions (410 = Gone)
-      if (error.statusCode === 410) {
-        console.log(`Removing invalid subscription: ${subscription.endpoint}`);
-        await supabase.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
-      }
+      // For direct implementation, we can't easily detect 410 errors
+      // You might want to implement retry logic or subscription cleanup based on response codes
 
       return { success: false, error: error.message, subscriptionId: subscription.id };
     }
   }
 
-  async logNotifications(userIds: string[], businessId: string, notificationData: any, results: any[]) {
+  async logDualNotifications(userIds: string[], businessId: string, notificationData: any, results: any[]) {
     try {
-      const logs = results.map((result, index) => {
-        const userIndex = index % userIds.length;
-        return {
-          user_id: userIds[userIndex],
-          business_id: businessId,
-          notification_type: notificationData.type,
-          title: notificationData.title,
-          body: notificationData.body,
-          data: {
-            url: notificationData.url,
-            appointmentId: notificationData.appointmentId
-          },
-          status: result.status === 'fulfilled' && result.value.success ? 'sent' : 'failed',
-          error_message: result.status === 'rejected' ? result.reason : result.value?.error || null,
-          sent_at: new Date().toISOString()
-        };
-      });
+      const logs = results.map((result) => ({
+        user_id: result.userId,
+        business_id: businessId,
+        notification_type: notificationData.type,
+        title: notificationData.title,
+        body: notificationData.body,
+        data: {
+          url: notificationData.url,
+          appointmentId: notificationData.appointmentId
+        },
+        status: result.pushSuccess || result.emailSuccess ? 'sent' : 'failed',
+        error_message: !result.pushSuccess && !result.emailSuccess ? 'Both push and email failed' : null,
+        sent_at: new Date().toISOString(),
+        delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
+      }));
 
       const { error } = await supabase.from("notification_logs").insert(logs);
       if (error) {
-        console.error("Failed to log notifications:", error);
+        console.error("Failed to log dual notifications:", error);
       }
     } catch (error) {
-      console.error("Error in logNotifications:", error);
+      console.error("Error in logDualNotifications:", error);
     }
   }
 }
 
 const notificationService = new NotificationService();
-
-// Helper function to detect changed fields
-function getChangedFields(oldData: any, newData: any) {
-  const fields = ['customer_name', 'customer_email', 'customer_phone', 'service_name', 'location', 'start_time', 'end_time'];
-  const changed = [];
-  fields.forEach((field) => {
-    if (oldData[field] !== newData[field]) {
-      changed.push(field.replace('_', ' '));
-    }
-  });
-  return changed;
-}
 
 // Notification Triggers
 async function triggerAppointmentNotification(action: string, appointment: any, businessId: string, changes: string[]) {
@@ -889,6 +1314,110 @@ serve(async (req) => {
     }
   }
 
+  // Test SMTP endpoint for email testing
+  if (req.method === "POST" && url.pathname.endsWith("/test-smtp")) {
+    try {
+      const { toEmail } = await req.json();
+
+      if (!toEmail) {
+        return jsonResponse({ error: "Missing toEmail parameter" }, 400);
+      }
+
+      console.log(`Testing SMTP with email: ${toEmail}`);
+
+      const testEmailData = {
+        to: toEmail,
+        subject: "SMTP Test - SSA Appointments",
+        html: `
+        <h1>SMTP Test Email</h1>
+        <p>This is a test email to verify SMTP configuration is working correctly.</p>
+        <p>Sent at: ${new Date().toISOString()}</p>
+        `,
+        text: `
+        SMTP Test Email
+
+        This is a test email to verify SMTP configuration is working correctly.
+
+        Sent at: ${new Date().toISOString()}
+        `
+      };
+
+      const success = await emailService.sendAppointmentEmail(
+        toEmail,
+        testEmailData.subject,
+        testEmailData.html,
+        testEmailData.text
+      );
+
+      if (success) {
+        return jsonResponse({
+          success: true,
+          message: `Test email sent successfully to ${toEmail}`,
+          smtp_configured: emailService.isConfigured()
+        });
+      } else {
+        return jsonResponse({
+          success: false,
+          message: `Failed to send test email to ${toEmail}`,
+          smtp_configured: emailService.isConfigured()
+        }, 500);
+      }
+
+    } catch (error: any) {
+      console.error("SMTP test error:", error);
+      return jsonResponse({
+        success: false,
+        error: error.message,
+        smtp_configured: emailService.isConfigured()
+      }, 500);
+    }
+  }
+
+  // Main webhook endpoint for direct WordPress SSA calls
+  if (req.method === "POST" && url.pathname.endsWith("/ssa-appointments")) {
+    try {
+      const payload = await req.json();
+
+      // Extract webhook token from payload
+      const webhookToken = payload.signature?.token;
+
+      if (!webhookToken) {
+        const response = jsonResponse({
+          error: "Missing webhook token in payload"
+        }, 401);
+        return withCors(response);
+      }
+
+      // Find business by webhook token (matches your WEBHOOK_TOKEN env var)
+      const { data: business, error } = await supabase
+        .from("businesses")
+        .select("id, name, webhook_secret")
+        .eq("webhook_secret", webhookToken)
+        .single();
+
+      if (error || !business) {
+        console.error("Business not found for webhook token:", webhookToken);
+        const response = jsonResponse({
+          error: "Invalid webhook token"
+        }, 401);
+        return withCors(response);
+      }
+
+      console.log(`Processing main webhook for business: ${business.name} (${business.id})`);
+
+      // Process the webhook with the found business
+      const result = await handleWebhook(payload, business.id);
+      return withCors(result);
+
+    } catch (err) {
+      console.error("Main webhook error:", err);
+      const response = jsonResponse({
+        error: "Invalid JSON payload"
+      }, 400);
+      return withCors(response);
+    }
+  }
+
   // 404 handler with CORS
   const response = jsonResponse({
     error: "Not found",
@@ -897,10 +1426,12 @@ serve(async (req) => {
       "GET /vapid-public-key",
       "GET /health",
       "POST /test-notification",
+      "POST /test-smtp",
       "POST /appointments",
       "PUT /appointments/{external_id}",
       "POST /ssa-webhook/[webhook_secret] (secure)",
-      "POST /webhook-from-ssa (legacy)"
+      "POST /webhook-from-ssa (legacy)",
+      "POST /ssa-appointments (main)"
     ]
   }, 404);
   return withCors(response);

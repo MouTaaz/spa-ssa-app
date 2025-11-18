@@ -32,7 +32,7 @@ export function SSASetupGuide({ onNext }: { onNext?: () => void }) {
     );
   }
 
-  const webhookUrl = `https://cuzwnsrtdnybwtuwaosr.supabase.co/functions/v1/ssa-webhook/${currentBusiness.webhook_secret}`;
+  const webhookUrl = `https://cuzwnsrtdnybwtuwaosr.supabase.co/functions/v1/ssa-appointments/${currentBusiness.webhook_secret}`;
 
   const copyToClipboard = async (text: string) => {
     try {

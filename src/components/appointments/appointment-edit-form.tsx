@@ -147,48 +147,63 @@ export function AppointmentEditForm({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white shadow-lg border border-gray-200">
+        <div className="p-4 sm:p-6 bg-gray-50">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h2 className="text-2xl font-bold">Edit Appointment</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                Edit Appointment
+              </h2>
               <div className="flex items-center gap-2 mt-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <p className="text-sm text-amber-700">
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                <p className="text-sm text-amber-600 leading-relaxed">
                   Changes will be logged and cannot be undone
                 </p>
               </div>
             </div>
-            <Button className="" variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="min-h-[44px] min-w-[44px] p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              aria-label="Close edit form"
+            >
+              <X className="w-5 h-5" />
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <Label className="" htmlFor="customer_name">
+                <Label
+                  htmlFor="customer_name"
+                  className="text-base font-medium text-gray-700"
+                >
                   Customer Name *
                 </Label>
                 <Input
                   type="text"
-                  className="w-full"
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   id="customer_name"
                   value={formData.customer_name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     handleInputChange("customer_name", e.target.value)
                   }
                   required
+                  aria-describedby="customer_name_help"
                 />
               </div>
 
               <div>
-                <Label className="" htmlFor="customer_email">
+                <Label
+                  htmlFor="customer_email"
+                  className="text-base font-medium text-gray-700"
+                >
                   Customer Email *
                 </Label>
                 <Input
-                  className=""
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   id="customer_email"
                   type="email"
                   value={formData.customer_email}
@@ -200,11 +215,14 @@ export function AppointmentEditForm({
               </div>
 
               <div>
-                <Label className="" htmlFor="customer_phone">
+                <Label
+                  htmlFor="customer_phone"
+                  className="text-base font-medium text-gray-700"
+                >
                   Customer Phone
                 </Label>
                 <Input
-                  className=""
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   type="tel"
                   id="customer_phone"
                   value={formData.customer_phone}
@@ -215,11 +233,14 @@ export function AppointmentEditForm({
               </div>
 
               <div>
-                <Label className="" htmlFor="service_name">
+                <Label
+                  htmlFor="service_name"
+                  className="text-base font-medium text-gray-700"
+                >
                   Service Name *
                 </Label>
                 <Input
-                  className=""
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   type="text"
                   id="service_name"
                   value={formData.service_name}
@@ -231,11 +252,14 @@ export function AppointmentEditForm({
               </div>
 
               <div>
-                <Label className="" htmlFor="location">
+                <Label
+                  htmlFor="location"
+                  className="text-base font-medium text-gray-700"
+                >
                   Location *
                 </Label>
                 <Input
-                  className=""
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   type="text"
                   id="location"
                   value={formData.location}
@@ -247,11 +271,14 @@ export function AppointmentEditForm({
               </div>
 
               <div>
-                <Label className="" htmlFor="vehicle_make_model">
+                <Label
+                  htmlFor="vehicle_make_model"
+                  className="text-base font-medium text-gray-700"
+                >
                   Vehicle Make/Model
                 </Label>
                 <Input
-                  className=""
+                  className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                   type="text"
                   id="vehicle_make_model"
                   value={formData.vehicle_make_model}
@@ -263,25 +290,32 @@ export function AppointmentEditForm({
             </div>
 
             <div>
-              <Label className="" htmlFor="customer_notes">
+              <Label
+                htmlFor="customer_notes"
+                className="text-base font-medium text-gray-700"
+              >
                 Customer Notes
               </Label>
               <Textarea
                 id="customer_notes"
+                className="w-full mt-1 min-h-[100px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500 resize-none"
                 value={formData.customer_notes}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                   handleInputChange("customer_notes", e.target.value)
                 }
-                rows={3}
+                rows={4}
               />
             </div>
 
             <div>
-              <Label className="" htmlFor="web_meeting_url">
+              <Label
+                htmlFor="web_meeting_url"
+                className="text-base font-medium text-gray-700"
+              >
                 Web Meeting URL
               </Label>
               <Input
-                className=""
+                className="w-full mt-1 min-h-[44px] text-base bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
                 type="url"
                 id="web_meeting_url"
                 placeholder="https://meet.google.com/..."
@@ -292,23 +326,23 @@ export function AppointmentEditForm({
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <Button
                 variant="default"
                 size="lg"
                 type="submit"
                 disabled={loading}
-                className="flex-1"
+                className="flex-1 min-h-[48px] text-base font-medium bg-blue-600 hover:bg-blue-700 text-white focus:ring-2 focus:ring-blue-500"
               >
-                <Save className="w-4 h-4 mr-2" />
+                <Save className="w-5 h-5 mr-2" />
                 {loading ? "Updating..." : "Update Appointment"}
               </Button>
               <Button
-                className=""
                 size="lg"
                 type="button"
                 variant="outline"
                 onClick={onClose}
+                className="min-h-[48px] text-base font-medium border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
               >
                 Cancel
               </Button>

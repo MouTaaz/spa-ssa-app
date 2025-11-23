@@ -179,7 +179,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-200"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       role="dialog"
@@ -191,7 +191,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
         className="w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
       >
         {/* Header */}
-        <div className="sticky top-0 flex items-center justify-between p-4 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="sticky top-0 flex items-center justify-between p-4 border-b bg-white shadow-sm">
           <div className="flex items-center gap-3">
             <h2
               id="appointment-detail-title"
@@ -238,7 +238,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
         </div>
 
         <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
-          <div className="p-4 sm:p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Status Badge */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
@@ -258,22 +258,22 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                 className="flex items-center justify-between w-full text-left"
                 aria-expanded={expandedSections.customer}
               >
-                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                  <User className="w-4 h-4" />
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <User className="w-5 h-5" />
                   Customer Information
                 </h3>
                 {expandedSections.customer ? (
-                  <ChevronUp className="w-4 h-4 text-slate-500" />
+                  <ChevronUp className="w-4 h-4 text-slate-700" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                  <ChevronDown className="w-4 h-4 text-slate-700" />
                 )}
               </button>
               {expandedSections.customer && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pl-4 sm:pl-6 border-l-2 border-slate-200">
                   <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-slate-400" />
+                    <User className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Name
                       </p>
                       <p className="font-medium text-slate-900">
@@ -282,9 +282,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Mail className="w-4 h-4 text-slate-400" />
+                    <Mail className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Email
                       </p>
                       <p className="font-medium text-slate-900">
@@ -293,9 +293,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Phone className="w-4 h-4 text-slate-400" />
+                    <Phone className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Phone
                       </p>
                       <p className="font-medium text-slate-900">
@@ -304,9 +304,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <MapPin className="w-4 h-4 text-slate-400" />
+                    <MapPin className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Location
                       </p>
                       <p className="font-medium text-slate-900">
@@ -324,22 +324,22 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                 className="flex items-center justify-between w-full text-left"
                 aria-expanded={expandedSections.service}
               >
-                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
                   Service Details
                 </h3>
                 {expandedSections.service ? (
-                  <ChevronUp className="w-4 h-4 text-slate-500" />
+                  <ChevronUp className="w-4 h-4 text-slate-700" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                  <ChevronDown className="w-4 h-4 text-slate-700" />
                 )}
               </button>
               {expandedSections.service && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pl-4 sm:pl-6 border-l-2 border-slate-200">
                   <div className="flex items-center gap-3">
-                    <FileText className="w-4 h-4 text-slate-400" />
+                    <FileText className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Service
                       </p>
                       <p className="font-medium text-slate-900">
@@ -348,9 +348,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <Calendar className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Date
                       </p>
                       <p className="font-medium text-slate-900">
@@ -359,15 +359,15 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-slate-400" />
+                    <Clock className="w-5 h-5 text-slate-600" />
                     <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wide">
+                      <p className="text-xs text-slate-600 uppercase tracking-wide">
                         Time
                       </p>
                       <p className="font-medium text-slate-900">
                         {format(startDate, "HH:mm")} -{" "}
                         {format(endDate, "HH:mm")}
-                        <span className="text-xs text-slate-500 ml-2">
+                        <span className="text-xs text-slate-600 ml-2">
                           ({duration} min)
                         </span>
                       </p>
@@ -375,9 +375,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                   </div>
                   {currentAppointment.web_meeting_url && (
                     <div className="flex items-center gap-3">
-                      <ExternalLink className="w-4 h-4 text-slate-400" />
+                      <ExternalLink className="w-5 h-5 text-slate-600" />
                       <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide">
+                        <p className="text-xs text-slate-600 uppercase tracking-wide">
                           Meeting Link
                         </p>
                         <a
@@ -402,20 +402,20 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                   className="flex items-center justify-between w-full text-left"
                   aria-expanded={expandedSections.vehicle}
                 >
-                  <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                    <Car className="w-4 h-4" />
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <Car className="w-5 h-5" />
                     Vehicle Information
                   </h3>
                   {expandedSections.vehicle ? (
-                    <ChevronUp className="w-4 h-4 text-slate-500" />
+                    <ChevronUp className="w-4 h-4 text-slate-700" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                    <ChevronDown className="w-4 h-4 text-slate-700" />
                   )}
                 </button>
                 {expandedSections.vehicle && (
-                  <div className="pl-6 border-l-2 border-slate-200">
+                  <div className="pl-4 sm:pl-6 border-l-2 border-slate-200">
                     <p className="font-medium text-slate-900 flex items-center gap-2">
-                      <Car className="w-4 h-4 text-slate-400" />
+                      <Car className="w-5 h-5 text-slate-600" />
                       {currentAppointment.vehicle_make_model}
                     </p>
                   </div>
@@ -430,18 +430,18 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                   className="flex items-center justify-between w-full text-left"
                   aria-expanded={expandedSections.notes}
                 >
-                  <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
                     Notes
                   </h3>
                   {expandedSections.notes ? (
-                    <ChevronUp className="w-4 h-4 text-slate-500" />
+                    <ChevronUp className="w-4 h-4 text-slate-700" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                    <ChevronDown className="w-4 h-4 text-slate-700" />
                   )}
                 </button>
                 {expandedSections.notes && (
-                  <div className="pl-6 border-l-2 border-slate-200">
+                  <div className="pl-4 sm:pl-6 border-l-2 border-slate-200">
                     <div className="text-slate-700 whitespace-pre-wrap bg-slate-50 p-3 rounded-lg">
                       {currentAppointment.customer_notes}
                       {/* Extract and display meeting link if present in notes */}
@@ -552,9 +552,9 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                 )}
               </button>
               {expandedSections.system && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-slate-200 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pl-4 sm:pl-6 border-l-2 border-slate-200 text-sm">
                   <div>
-                    <p className="text-slate-500 uppercase tracking-wide text-xs">
+                    <p className="text-slate-600 uppercase tracking-wide text-xs">
                       External ID
                     </p>
                     <div className="flex items-center gap-2 mt-1">
@@ -580,7 +580,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </div>
                   </div>
                   <div>
-                    <p className="text-slate-500 uppercase tracking-wide text-xs">
+                    <p className="text-slate-600 uppercase tracking-wide text-xs">
                       Source
                     </p>
                     <p className="font-medium mt-1">
@@ -588,7 +588,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 uppercase tracking-wide text-xs">
+                    <p className="text-slate-600 uppercase tracking-wide text-xs">
                       Created
                     </p>
                     <p className="font-medium mt-1">
@@ -599,7 +599,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 uppercase tracking-wide text-xs">
+                    <p className="text-slate-600 uppercase tracking-wide text-xs">
                       Updated
                     </p>
                     <p className="font-medium mt-1">
@@ -611,7 +611,7 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
                   </div>
                   {currentAppointment.if_edited && (
                     <div>
-                      <p className="text-slate-500 uppercase tracking-wide text-xs">
+                      <p className="text-slate-600 uppercase tracking-wide text-xs">
                         Edited By
                       </p>
                       <p className="font-medium mt-1">

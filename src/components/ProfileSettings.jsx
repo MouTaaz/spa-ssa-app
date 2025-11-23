@@ -10,7 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "/components/ui/card";
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "../stores/authStore";
@@ -55,6 +55,7 @@ export const ProfileSettings = ({ onBack }) => {
   const { user, profile, updateProfile, isLoading } = useAuthStore();
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const {
     register,
@@ -118,9 +119,9 @@ export const ProfileSettings = ({ onBack }) => {
       initial="hidden"
       animate="visible"
       variants={containerVariants}
-      className="min-h-screen bg-linear-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-4 mobile-smooth"
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-3 sm:p-4 md:p-6 mobile-smooth"
     >
-      <div className="container mx-auto max-w-2xl">
+      <div className="container mx-auto max-w-2xl px-2 sm:px-4">
         {/* Header */}
         <motion.div
           variants={itemVariants}
@@ -156,20 +157,20 @@ export const ProfileSettings = ({ onBack }) => {
           </div>
         </motion.div>
 
-        <Card className="bg-white dark:bg-slate-800 border-0 shadow-xl">
-          <CardHeader className="text-center space-y-4 pb-6">
+        <Card className="bg-white dark:bg-slate-800 border-0 shadow-2xl shadow-slate-200/50 dark:shadow-slate-900/50 rounded-2xl overflow-hidden">
+          <CardHeader className="text-center space-y-4 pb-6 px-4 sm:px-6">
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="flex justify-center"
             >
-              <div className="w-16 h-16 bg-linear-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <User className="h-8 w-8 text-white" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl">
+                <User className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
             </motion.div>
-            <CardTitle className="text-2xl font-bold bg-linear-gradient-to-br from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
               Profile Information
             </CardTitle>
-            <CardDescription className="text-base text-slate-600 dark:text-slate-400">
+            <CardDescription className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
               Update your personal and business details
             </CardDescription>
           </CardHeader>
@@ -255,7 +256,7 @@ export const ProfileSettings = ({ onBack }) => {
                   Personal Information
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Full Name */}
                   <div className="space-y-2">
                     <Label
@@ -457,7 +458,7 @@ export const ProfileSettings = ({ onBack }) => {
               {/* Submit Button */}
               <motion.div
                 variants={itemVariants}
-                className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700"
+                className="flex flex-col sm:flex-row justify-end sm:justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700"
               >
                 <motion.button
                   type="button"
@@ -465,7 +466,7 @@ export const ProfileSettings = ({ onBack }) => {
                   whileTap={{ scale: 0.98 }}
                   onClick={onBack}
                   disabled={isSubmitting}
-                  className="px-6 py-3 text-base font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all duration-200 disabled:opacity-50 mobile-tap-highlight"
+                  className="w-full sm:w-auto px-6 py-3 text-base font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all duration-200 disabled:opacity-50 mobile-tap-highlight"
                 >
                   Cancel
                 </motion.button>
@@ -478,7 +479,7 @@ export const ProfileSettings = ({ onBack }) => {
                   }}
                   whileTap={{ scale: 0.98 }}
                   disabled={isSubmitting || isUploading}
-                  className="px-6 py-3 text-base font-semibold bg-linear-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mobile-tap-highlight"
+                  className="w-full sm:w-auto px-6 py-3 text-base font-semibold bg-linear-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mobile-tap-highlight"
                 >
                   {isSubmitting || isUploading ? (
                     <motion.div

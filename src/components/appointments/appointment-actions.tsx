@@ -35,11 +35,7 @@ export function AppointmentActions({
       // Create history entry for status change
       await createAppointmentHistoryEntry(
         appointment.external_id,
-        newStatus === "CANCELLED"
-          ? "CANCEL"
-          : newStatus === "CONFIRMED"
-          ? "CONFIRM"
-          : "UPDATE",
+        "EDIT",
         "user",
         { status: appointment.status },
         { status: newStatus },

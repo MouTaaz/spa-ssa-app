@@ -20,7 +20,23 @@
       content="black-translucent"
     />
     <meta name="apple-mobile-web-app-title" content="SSA Manager" />
-
+    <script
+      src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+      defer
+    ></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.init({
+          appId: "2407a2e4-b6c6-4b30-99ad-189ec1db8a80",
+          safari_web_id:
+            "web.onesignal.auto.67fef31a-7360-4fd8-9645-1463ac233cef",
+          notifyButton: {
+            enable: true,
+          },
+        });
+      });
+    </script>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="/icon-192.png" />
 

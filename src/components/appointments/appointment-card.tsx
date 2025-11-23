@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Video,
   ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -48,31 +49,38 @@ export function AppointmentCard({
   return (
     <Card
       onClick={onClick}
-      className="p-4 hover:shadow-lg transition-all duration-200 cursor-pointer bg-white border-2 hover:border-blue-200"
+      className="p-4 sm:p-6 hover:shadow-2xl hover:shadow-blue-100/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-white to-slate-50 border-2 hover:border-blue-300 rounded-2xl"
     >
-      {/* Mobile-first edited info highlight */}
+      {/* Enhanced mobile-first edited info highlight */}
       {appointment.display_status === "EDITED" && (
-        <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-purple-100 border-l-4 border-purple-400 rounded-lg shadow-sm">
+        <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 via-purple-100 to-purple-50 border-l-4 border-purple-500 rounded-xl shadow-lg animate-fade-in">
           <div className="flex items-center gap-2 text-purple-800 mb-2">
-            <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
-            <span className="text-sm font-semibold">✏️ Customer Edited</span>
+            <div className="w-4 h-4 bg-purple-500 rounded-full animate-pulse shadow-sm"></div>
+            <span className="text-sm font-bold tracking-wide">
+              ✏️ Customer Edited
+            </span>
           </div>
-          <p className="text-xs text-purple-700 leading-relaxed">
+          <p className="text-xs text-purple-700 leading-relaxed font-medium">
             Customer information was updated. Check history for details.
           </p>
           <div className="mt-2 flex flex-wrap gap-1">
-            <span className="inline-block px-2 py-1 bg-purple-200 text-purple-800 text-xs rounded-full font-medium">
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-200 text-purple-800 text-xs rounded-full font-semibold shadow-sm">
+              <AlertCircle className="w-3 h-3" />
               Info Changed
             </span>
           </div>
         </div>
       )}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-3">
         <div className="flex-1">
-          <h3 className="font-semibold text-lg">{appointment.customer_name}</h3>
-          <p className="text-sm text-slate-600">{appointment.service_name}</p>
+          <h3 className="font-bold text-xl text-slate-900 mb-1 truncate">
+            {appointment.customer_name}
+          </h3>
+          <p className="text-sm text-slate-600 font-medium bg-slate-100 inline-block px-2 py-1 rounded-full truncate">
+            {appointment.service_name}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
           {hasRescheduleHistory && (
             <Button
               variant="outline"
@@ -83,14 +91,17 @@ export function AppointmentCard({
               }}
               aria-controls={`reschedule-history-${appointment.id}`}
               aria-expanded={showRescheduleHistory}
-              className="text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+              className="text-xs border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-all duration-200 min-h-[44px] w-full sm:w-auto"
             >
-              Rescheduled ⓘ{" "}
-              {showRescheduleHistory ? (
-                <ChevronUp className="w-3 h-3 ml-1" />
-              ) : (
-                <ChevronDown className="w-3 h-3 ml-1" />
-              )}
+              <span className="flex items-center gap-1">
+                <span className="text-orange-600">🔄</span>
+                Rescheduled
+                {showRescheduleHistory ? (
+                  <ChevronUp className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+              </span>
             </Button>
           )}
           <Badge
@@ -101,11 +112,11 @@ export function AppointmentCard({
                   : "cancelled_final"
                 : (appointment.status.toLowerCase() as any)
             }
-            className={
+            className={`text-xs font-bold px-3 py-1 rounded-full shadow-sm ${
               appointment.status === "CANCELLED"
                 ? undefined
                 : statusColors[appointment.status]
-            }
+            }`}
           >
             {appointment.display_status === "RESCHEDULED"
               ? "BOOKED (Rescheduled)"
@@ -120,49 +131,90 @@ export function AppointmentCard({
         </div>
       </div>
 
-      <div className="space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-slate-700">
-          <Calendar className="w-4 h-4" />
-          <span>{format(startDate, "MMM dd, yyyy")}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="flex items-center gap-3 text-slate-700 bg-slate-50 p-3 rounded-lg hover:bg-slate-100 transition-colors duration-200">
+          <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+            <Calendar className="w-4 h-4 text-blue-600" />
+          </div>
+          <div>
+            <span className="font-medium text-slate-900">
+              {format(startDate, "MMM dd, yyyy")}
+            </span>
+            <span className="block text-xs text-slate-500">Date</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 text-slate-700">
-          <Clock className="w-4 h-4" />
-          <span>
-            {format(startDate, "HH:mm")} - {format(endDate, "HH:mm")}
-          </span>
+        <div className="flex items-center gap-3 text-slate-700 bg-slate-50 p-3 rounded-lg hover:bg-slate-100 transition-colors duration-200">
+          <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+            <Clock className="w-4 h-4 text-green-600" />
+          </div>
+          <div>
+            <span className="font-medium text-slate-900">
+              {format(startDate, "HH:mm")} - {format(endDate, "HH:mm")}
+            </span>
+            <span className="block text-xs text-slate-500">Time</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 text-slate-700">
-          <MapPin className="w-4 h-4" />
-          <span>{appointment.location}</span>
+        <div className="flex items-center gap-3 text-slate-700 bg-slate-50 p-3 rounded-lg hover:bg-slate-100 transition-colors duration-200 sm:col-span-2">
+          <div className="flex-shrink-0 w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+            <MapPin className="w-4 h-4 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <span className="font-medium text-slate-900 break-words">
+              {appointment.location}
+            </span>
+            <span className="block text-xs text-slate-500">Location</span>
+          </div>
         </div>
 
         {appointment.vehicle_make_model && (
-          <div className="flex items-center gap-2 text-slate-700">
-            <Wrench className="w-4 h-4" />
-            <span>{appointment.vehicle_make_model}</span>
+          <div className="flex items-center gap-3 text-slate-700 bg-slate-50 p-3 rounded-lg hover:bg-slate-100 transition-colors duration-200 sm:col-span-2">
+            <div className="flex-shrink-0 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Wrench className="w-4 h-4 text-yellow-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-slate-900 break-words">
+                {appointment.vehicle_make_model}
+              </span>
+              <span className="block text-xs text-slate-500">Vehicle</span>
+            </div>
           </div>
         )}
 
         {appointment.customer_phone && (
-          <div className="flex items-center gap-2 text-slate-700">
-            <Phone className="w-4 h-4" />
-            <span>{appointment.customer_phone}</span>
+          <div className="flex items-center gap-3 text-slate-700 bg-slate-50 p-3 rounded-lg hover:bg-slate-100 transition-colors duration-200 sm:col-span-2">
+            <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+              <Phone className="w-4 h-4 text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <span className="font-medium text-slate-900 break-words">
+                {appointment.customer_phone}
+              </span>
+              <span className="block text-xs text-slate-500">Phone</span>
+            </div>
           </div>
         )}
 
         {appointment.web_meeting_url && (
-          <div className="flex items-center gap-2 text-slate-700">
+          <div className="sm:col-span-2">
             <a
               href={appointment.web_meeting_url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-800 underline"
+              className="flex items-center gap-3 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-3 rounded-lg transition-all duration-200 group"
             >
-              <Video className="w-4 h-4" />
-              <span>Join Meeting</span>
+              <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                <Video className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <span className="font-medium underline">Join Meeting</span>
+                <span className="block text-xs text-blue-500">
+                  Click to open
+                </span>
+              </div>
+              <ExternalLink className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
             </a>
           </div>
         )}
@@ -199,18 +251,20 @@ export function AppointmentCard({
         </div>
       )}
 
-      {/* Expandable Reschedule History */}
+      {/* Enhanced Expandable Reschedule History */}
       {hasRescheduleHistory && (
         <div
           id={`reschedule-history-${appointment.id}`}
-          className={`mt-4 overflow-hidden transition-all duration-300 ease-in-out ${
-            showRescheduleHistory ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          className={`mt-4 overflow-hidden transition-all duration-500 ease-in-out ${
+            showRescheduleHistory
+              ? "max-h-[1000px] opacity-100 scale-100"
+              : "max-h-0 opacity-0 scale-95"
           }`}
         >
-          <div className="border-t border-orange-200 pt-4 space-y-3">
-            <h4 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
-              <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-              Reschedule History
+          <div className="border-t-2 border-orange-300 pt-4 space-y-4 bg-gradient-to-r from-orange-50/50 to-orange-100/50 p-4 rounded-xl">
+            <h4 className="font-bold text-base text-slate-800 flex items-center gap-3">
+              <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse shadow-sm"></div>
+              <span className="text-orange-700">Reschedule History</span>
             </h4>
 
             {/* What Changed */}
@@ -338,10 +392,12 @@ export function AppointmentCard({
               </div>
             )}
 
-            {/* External ID Trail */}
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <h5 className="font-medium text-sm text-slate-800 mb-3 flex items-center gap-2">
-                <span className="text-slate-600">🔗</span>
+            {/* Enhanced External ID Trail */}
+            <div className="bg-white p-4 rounded-xl border-2 border-slate-300 shadow-lg">
+              <h5 className="font-bold text-base text-slate-800 mb-4 flex items-center gap-3">
+                <div className="w-4 h-4 bg-slate-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs">🔗</span>
+                </div>
                 External ID Trail
               </h5>
               <div className="grid grid-cols-2 gap-3 text-xs">

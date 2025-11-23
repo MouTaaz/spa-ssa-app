@@ -26,7 +26,10 @@ export function AppointmentsPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{
+    from: string | null;
+    to: string | null;
+  }>({ from: null, to: null });
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<any>(null);
 
@@ -79,13 +82,26 @@ export function AppointmentsPage() {
           apt.service_name.toLowerCase().includes(search)
         );
       }
-      if (dateFilter) {
-        const aptDate = format(new Date(apt.start_time), "yyyy-MM-dd");
-        return aptDate === dateFilter;
+      if (dateRange.from || dateRange.to) {
+        const aptDate = new Date(apt.start_time);
+        const fromDate = dateRange.from
+          ? new Date(dateRange.from + "T00:00:00")
+          : null;
+        const toDate = dateRange.to
+          ? new Date(dateRange.to + "T23:59:59")
+          : null;
+
+        if (fromDate && toDate) {
+          return aptDate >= fromDate && aptDate <= toDate;
+        } else if (fromDate) {
+          return aptDate >= fromDate;
+        } else if (toDate) {
+          return aptDate <= toDate;
+        }
       }
       return true;
     });
-  }, [appointments, statusFilter, searchFilter, dateFilter]);
+  }, [appointments, statusFilter, searchFilter, dateRange]);
 
   if (authLoading) {
     return (
@@ -218,7 +234,7 @@ export function AppointmentsPage() {
               <AppointmentFilters
                 onStatusChange={setStatusFilter}
                 onSearchChange={setSearchFilter}
-                onDateChange={setDateFilter}
+                onDateRangeChange={setDateRange}
               />
             </div>
           </div>

@@ -59,8 +59,10 @@ export function ProfilePage() {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <Card className="p-8 mb-6">
-          <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
+        <Card className="p-4 md:p-8 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8">
+            Profile Settings
+          </h1>
 
           {error && (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
@@ -77,7 +79,7 @@ export function ProfilePage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-sm font-medium mb-2">
                 Full Name
@@ -88,6 +90,7 @@ export function ProfilePage() {
                 value={formData.full_name}
                 onChange={handleInputChange}
                 placeholder="Your full name"
+                className="h-12 md:h-10"
               />
             </div>
 
@@ -101,6 +104,7 @@ export function ProfilePage() {
                 value={formData.business_name}
                 onChange={handleInputChange}
                 placeholder="Your business name"
+                className="h-12 md:h-10"
               />
             </div>
 
@@ -112,6 +116,7 @@ export function ProfilePage() {
                 value={formData.phone}
                 onChange={handleInputChange}
                 placeholder="Your phone number"
+                className="h-12 md:h-10"
               />
             </div>
 
@@ -122,19 +127,29 @@ export function ProfilePage() {
               </p>
             </div>
 
-            <div className="flex gap-3">
-              <Button type="submit" disabled={loading}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-start">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full sm:w-auto"
+              >
                 {loading ? "Saving..." : "Save Changes"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => navigate("/settings")}
+                className="w-full sm:w-auto"
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Business Settings
               </Button>
-              <Button type="button" variant="outline" onClick={handleSignOut}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSignOut}
+                className="w-full sm:w-auto"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
               </Button>

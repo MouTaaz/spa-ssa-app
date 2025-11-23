@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+
 import {
   AlertCircle,
   Plus,
@@ -149,52 +150,52 @@ export function BusinessSettings() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex w-full overflow-x-auto md:grid md:grid-cols-7">
+        <TabsList className="flex overflow-x-auto overflow-y-hidden w-full md:w-auto mb-6 space-x-2 border-b ">
           <TabsTrigger
             value="general"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Settings className="w-4 h-4" />
             General
           </TabsTrigger>
           <TabsTrigger
             value="services"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Briefcase className="w-4 h-4" />
             Services
           </TabsTrigger>
           <TabsTrigger
             value="hours"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Clock className="w-4 h-4" />
             Hours
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Bell className="w-4 h-4" />
             Notifications
           </TabsTrigger>
           <TabsTrigger
             value="push"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Smartphone className="w-4 h-4" />
             Push
           </TabsTrigger>
           <TabsTrigger
             value="blocked"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <Calendar className="w-4 h-4" />
             Blocked
           </TabsTrigger>
           <TabsTrigger
             value="subscription"
-            className="flex items-center gap-2 flex-shrink-0"
+            className="flex items-center gap-2 flex-shrink-0 h-12 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
             <CreditCard className="w-4 h-4" />
             Subscription
@@ -376,7 +377,7 @@ export function BusinessSettings() {
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
             <div>
               <Button
                 variant="outline"

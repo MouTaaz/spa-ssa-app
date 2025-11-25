@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { requestNotificationPermission, subscribeToPushNotifications, savePushSubscription, deletePushSubscription } from "@/lib/notifications"
+import { subscribeToPushNotifications, unsubscribeFromPushNotifications, checkOneSignalSubscriptionStatus } from "@/lib/notifications"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/useAuth"
 
@@ -9,37 +9,31 @@ import { useAuth } from "@/hooks/useAuth"
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
-  const [subscription, setSubscription] = useState<PushSubscription | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const { user } = useAuth()
 
   useEffect(() => {
     const checkSupport = async () => {
-      const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window
-
+      // OneSignal handles support checks internally
+      const supported = "Notification" in window
       setIsSupported(supported)
 
       if (supported && user) {
-        await checkExistingSubscription()
+        await checkSubscriptionStatus()
       }
     }
 
     checkSupport()
   }, [user])
 
-  const checkExistingSubscription = async () => {
+  const checkSubscriptionStatus = async () => {
     if (!user) return
 
     try {
-      const registration = await navigator.serviceWorker.ready
-      const existingSub = await registration.pushManager.getSubscription()
-
-      if (existingSub) {
-        setSubscription(existingSub)
-        setIsSubscribed(true)
-      }
+      const subscribed = await checkOneSignalSubscriptionStatus()
+      setIsSubscribed(subscribed)
     } catch (error) {
-      console.error("Error checking existing subscription:", error)
+      console.error("Error checking OneSignal subscription status:", error)
     }
   }
 
@@ -48,16 +42,8 @@ export function usePushNotifications() {
 
     setIsLoading(true)
     try {
-      const permission = await requestNotificationPermission()
-      if (!permission) return false
-
-      const sub = await subscribeToPushNotifications()
-      if (!sub) return false
-
-      // Save to Supabase
-      const success = await savePushSubscription(sub, user.id)
+      const success = await subscribeToPushNotifications(user.id)
       if (success) {
-        setSubscription(sub)
         setIsSubscribed(true)
         return true
       }
@@ -70,14 +56,12 @@ export function usePushNotifications() {
   }
 
   const unsubscribe = async () => {
-    if (!subscription || !user) return false
+    if (!user) return false
 
     setIsLoading(true)
     try {
-      const success = await deletePushSubscription(subscription, user.id)
+      const success = await unsubscribeFromPushNotifications(user.id)
       if (success) {
-        await subscription.unsubscribe()
-        setSubscription(null)
         setIsSubscribed(false)
         return true
       }
@@ -92,7 +76,6 @@ export function usePushNotifications() {
   return {
     isSupported,
     isSubscribed,
-    subscription,
     isLoading,
     subscribe,
     unsubscribe

@@ -12,6 +12,7 @@
 - [x] Database migration executed
 - [x] Supabase environment variables set
 - [x] Frontend environment variable added (.env.local)
+- [x] Create vercel.json to fix 404 errors on page refresh for SPA routing
 
 ## 📋 Remaining Setup Steps
 

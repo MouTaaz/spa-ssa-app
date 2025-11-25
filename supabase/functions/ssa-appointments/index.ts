@@ -217,7 +217,7 @@ async function sendOneSignalPushNotification(
   apiKey: string,
   externalUserIds: string[],
   notificationData: any
-): Promise<boolean> {
+): Promise<{ ok: boolean; status: number; body: any }> {
   try {
     const payload = {
       app_id: appId,
@@ -243,19 +243,25 @@ async function sendOneSignalPushNotification(
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('OneSignal API error:', result);
-      return false;
+    let resultBody: any = null;
+    try {
+      resultBody = await response.json();
+    } catch (err) {
+      // Non-JSON response
+      resultBody = await response.text();
     }
 
-    console.log(`✅ OneSignal notification sent successfully. Recipients: ${result.recipients || 0}`);
-    return true;
+    if (!response.ok) {
+      console.error('OneSignal API error:', resultBody);
+      return { ok: false, status: response.status, body: resultBody };
+    }
+
+    console.log(`✅ OneSignal notification API accepted. Recipients: ${resultBody.recipients || 0}`);
+    return { ok: true, status: response.status, body: resultBody };
 
   } catch (error: any) {
-    console.error('OneSignal push notification error:', error.message);
-    return false;
+    console.error('OneSignal push notification error:', error?.message ?? error);
+    return { ok: false, status: 0, body: { message: error?.message ?? String(error) } };
   }
 }
 
@@ -588,28 +594,28 @@ class NotificationService {
 
       if (!oneSignalAppId || !oneSignalApiKey) {
         console.error("OneSignal APP ID or API Key not configured");
-        return { success: false, error: "OneSignal APP ID or API Key not configured" };
+        return { success: false, error: "OneSignal APP ID or API Key not configured", providerResponse: null };
       }
 
-      // Assumes subscription contains user external ID for OneSignal
-      const userExternalId = subscription.user_external_id;
+      // Accept multiple possible field names that might hold the OneSignal player/external id
+      const userExternalId = subscription.user_external_id || subscription.onesignal_player_id || subscription.one_signal_player_id || subscription.onesignal_external_id || null;
 
       if (!userExternalId) {
-        console.error("Subscription missing user external ID for OneSignal");
-        return { success: false, error: "Missing user external ID for OneSignal" };
+        console.error("Subscription missing OneSignal identifier (user_external_id / onesignal_player_id)");
+        return { success: false, error: "Missing OneSignal id", providerResponse: null, subscriptionId: subscription.id };
       }
 
-      const success = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData);
+      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData);
 
-      if (!success) {
-        throw new Error('Failed to send OneSignal push notification');
+      if (!sendResult.ok) {
+        console.error(`OneSignal send failed for subscription ${subscription.id}:`, sendResult.body);
+        return { success: false, error: 'Failed to send OneSignal push notification', providerResponse: sendResult.body, subscriptionId: subscription.id };
       }
 
-      return { success: true, subscriptionId: subscription.id };
+      return { success: true, subscriptionId: subscription.id, providerResponse: sendResult.body };
     } catch (error: any) {
-      console.error(`Push notification failed for subscription ${subscription.id}:`, error.message);
-
-      return { success: false, error: error.message, subscriptionId: subscription.id };
+      console.error(`Push notification failed for subscription ${subscription.id}:`, error?.message ?? error);
+      return { success: false, error: error?.message ?? String(error), providerResponse: null, subscriptionId: subscription.id };
     }
   }
 
@@ -626,7 +632,8 @@ class NotificationService {
           appointmentId: notificationData.appointmentId
         },
         status: result.pushSuccess || result.emailSuccess ? 'sent' : 'failed',
-        error_message: !result.pushSuccess && !result.emailSuccess ? 'Both push and email failed' : null,
+        error_message: !result.pushSuccess && !result.emailSuccess ? (result.error || 'Both push and email failed') : null,
+        provider_response: result.providerResponse || null,
         sent_at: new Date().toISOString(),
         delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
       }));

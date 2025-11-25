@@ -64,6 +64,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { user } = useAuth();
   const { currentBusiness } = useBusiness();
 
   useEffect(() => {

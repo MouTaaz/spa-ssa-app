@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { supabase, createAppointmentHistoryEntry } from "@/lib/supabase";
-import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AlertCircle, Loader } from "lucide-react";
@@ -24,6 +24,7 @@ export function AppointmentActions({
   appointment,
   onStatusChange,
 }: AppointmentActionsProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

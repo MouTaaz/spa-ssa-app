@@ -19,6 +19,7 @@ import { InstallPrompt } from "@/components/mobile/install-prompt";
 import { MigrationRequired } from "@/components/MigrationRequired";
 import { OnboardingManager } from "@/components/onboarding/OnboardingManager";
 import { initializeDB } from "@/lib/offline-storage";
+import { initializeOneSignal } from "@/lib/notifications";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -100,6 +101,24 @@ export function App() {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  // Update OneSignal external user ID when user changes
+  useEffect(() => {
+    const updateOneSignalUser = async () => {
+      if (user?.id) {
+        try {
+          // Import OneSignal dynamically to avoid issues
+          const OneSignal = (await import("react-onesignal")).default;
+          await OneSignal.login(user.id);
+          console.log("OneSignal external user ID set:", user.id);
+        } catch (error) {
+          console.error("Failed to set OneSignal external user ID:", error);
+        }
+      }
+    };
+
+    updateOneSignalUser();
+  }, [user?.id]);
 
   return (
     <BrowserRouter>

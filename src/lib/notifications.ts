@@ -1,4 +1,31 @@
 import { supabase } from "./supabase"
+import OneSignal from 'react-onesignal'
+
+// OneSignal App ID - should be set as environment variable
+const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesignal-app-id'
+
+export async function initializeOneSignal(userId?: string) {
+  try {
+    // Initialize OneSignal
+    await OneSignal.init({
+      appId: ONESIGNAL_APP_ID,
+      serviceWorkerPath: '/OneSignalSDKWorker.js',
+      serviceWorkerParam: { scope: '/' },
+      allowLocalhostAsSecureOrigin: true,
+    })
+
+    // Set external user ID if user is logged in
+    if (userId) {
+      await OneSignal.login(userId)
+    }
+
+    console.log('OneSignal initialized successfully')
+    return true
+  } catch (error) {
+    console.error('Failed to initialize OneSignal:', error)
+    return false
+  }
+}
 
 export async function requestNotificationPermission() {
   if (!("Notification" in window)) {
@@ -18,110 +45,100 @@ export async function requestNotificationPermission() {
   return false
 }
 
-export async function getVapidPublicKey(): Promise<string | null> {
+export async function subscribeToPushNotifications(userId: string): Promise<boolean> {
   try {
-    // For local development, use the real VAPID key (not test key)
-    if (window.location.hostname === 'localhost') {
-      console.log('Using real VAPID key for localhost development');
-      // Use the real VAPID key generated from web-push
-      return 'BAXdZ6FW78zaW9CCHZ2WKjX68AVJdzQq1l_aJZDxSsNXE9hxS_iPIjA7G2VHY00jsniiyOx-sRvgMvJUEYmNclc';
-    }
-
-    // Use the consolidated ssa-appointments function for VAPID key
-    const { data, error } = await supabase.functions.invoke('ssa-appointments/vapid-public-key');
-
-    if (error) {
-      console.error('Failed to fetch VAPID public key:', error);
-      return null;
-    }
-
-    console.log('VAPID key response:', data);
-    console.log('VAPID public key:', data.publicKey);
-    return data.publicKey;
-  } catch (error) {
-    console.error('Error fetching VAPID key:', error);
-    return null;
-  }
-}
-
-export async function subscribeToPushNotifications() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    console.log("Push notifications not supported")
-    return null
-  }
-
-  try {
-    // Get VAPID key from Edge Function
-    const vapidKey = await getVapidPublicKey()
-    if (!vapidKey) {
-      console.error("No VAPID public key available")
-      return null
-    }
-
-    console.log('VAPID key to convert:', vapidKey);
-    const convertedKey = urlBase64ToUint8Array(vapidKey);
-    console.log('Converted VAPID key:', convertedKey);
-
-    const registration = await navigator.serviceWorker.ready
-    console.log('Service worker ready, attempting subscription...');
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedKey as BufferSource,
-    })
-    console.log('Subscription successful:', subscription);
-    return subscription
-  } catch (error) {
-    console.error("Failed to subscribe to push notifications:", error)
-    return null
-  }
-}
-
-export async function savePushSubscription(subscription: PushSubscription, userId: string): Promise<boolean> {
-  try {
-    const p256dh = arrayBufferToBase64(subscription.getKey('p256dh')!)
-    const auth = arrayBufferToBase64(subscription.getKey('auth')!)
-
-    const { error } = await supabase
-      .from('push_subscriptions')
-      .upsert({
-        user_id: userId,
-        endpoint: subscription.endpoint,
-        p256dh,
-        auth,
-        platform: getPlatform(),
-        user_agent: navigator.userAgent,
-      }, {
-        onConflict: 'endpoint'
-      })
-
-    if (error) {
-      console.error("Failed to save push subscription:", error)
+    // Request notification permission
+    const permissionGranted = await requestNotificationPermission()
+    if (!permissionGranted) {
+      console.log("Notification permission denied")
       return false
     }
 
-    return true
+    // Show native prompt for push notifications
+    await OneSignal.Slidedown.promptPush()
+
+    // Wait for subscription to be ready
+    const isSubscribed = await OneSignal.User.PushSubscription.optedIn
+    if (isSubscribed) {
+      // Save subscription to database
+      await saveOneSignalSubscription(userId)
+      return true
+    }
+
+    return false
   } catch (error) {
-    console.error("Error saving push subscription:", error)
+    console.error("Failed to subscribe to push notifications:", error)
     return false
   }
 }
 
-export async function deletePushSubscription(subscription: PushSubscription, userId: string): Promise<boolean> {
+export async function saveOneSignalSubscription(userId: string): Promise<boolean> {
   try {
+    // Get OneSignal Player ID
+    const playerId = await OneSignal.User.PushSubscription.id
+    if (!playerId) {
+      console.log("No OneSignal Player ID available yet")
+      return false
+    }
+
+    // Save to database
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .upsert({
+        user_id: userId,
+        onesignal_player_id: playerId,
+        onesignal_external_user_id: userId,
+        platform: getPlatform(),
+        user_agent: navigator.userAgent,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,onesignal_player_id'
+      })
+
+    if (error) {
+      console.error("Failed to save OneSignal subscription:", error)
+      return false
+    }
+
+    console.log("✅ OneSignal subscription saved to database")
+    return true
+  } catch (error) {
+    console.error("Error saving OneSignal subscription:", error)
+    return false
+  }
+}
+
+export async function unsubscribeFromPushNotifications(userId: string): Promise<boolean> {
+  try {
+    // Opt out from push notifications
+    await OneSignal.User.PushSubscription.optOut()
+
+    // Remove from database
     const { error } = await supabase
       .from('push_subscriptions')
       .delete()
       .eq('user_id', userId)
-      .eq('endpoint', subscription.endpoint)
+      .eq('onesignal_external_user_id', userId)
 
     if (error) {
-      console.error("Failed to delete push subscription:", error)
+      console.error("Failed to delete OneSignal subscription:", error)
       return false
     }
 
+    console.log("✅ OneSignal subscription removed from database")
     return true
   } catch (error) {
-    console.error("Error deleting push subscription:", error)
+    console.error("Error unsubscribing from push notifications:", error)
+    return false
+  }
+}
+
+export async function checkOneSignalSubscriptionStatus(): Promise<boolean> {
+  try {
+    const isSubscribed = await OneSignal.User.PushSubscription.optedIn
+    return isSubscribed || false
+  } catch (error) {
+    console.error("Error checking OneSignal subscription status:", error)
     return false
   }
 }

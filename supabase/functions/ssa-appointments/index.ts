@@ -15,7 +15,7 @@ class EmailService {
     this.smtpHost = Deno.env.get("SMTP_HOST") ?? "";
     this.smtpPort = parseInt(Deno.env.get("SMTP_PORT") ?? "587");
     this.smtpUser = Deno.env.get("SMTP_USER") ?? "";
-    this.smtpFrom = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
+    this.smtpPass = Deno.env.get("SMTP_PASS") ?? "";
     this.smtpFrom = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
 
     // Validate SMTP configuration
@@ -211,126 +211,55 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Direct Web Push implementation using Web Crypto API
-async function generateVAPIDKeys(): Promise<{ publicKey: string; privateKey: string }> {
-  const keyPair = await crypto.subtle.generateKey(
-    {
-      name: 'ECDSA',
-      namedCurve: 'P-256'
-    },
-    true,
-    ['sign', 'verify']
-  );
-
-  const publicKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-  const privateKey = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-
-  const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKey)));
-  const privateKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(privateKey)));
-
-  // Convert to base64url format
-  const publicKeyBase64Url = publicKeyBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const privateKeyBase64Url = privateKeyBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-  return {
-    publicKey: publicKeyBase64Url,
-    privateKey: privateKeyBase64Url
-  };
-}
-
-// Get VAPID keys from environment variables with validation
-function getVAPIDKeys() {
-  const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
-  const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-
-  // Generate keys if not set in environment
-  if (!publicKey || !privateKey) {
-    console.warn("⚠️ VAPID keys not set in environment - generating new keys");
-    try {
-      // Note: This is synchronous for compatibility, but in real implementation
-      // you'd want to make this async and handle the promise properly
-      throw new Error("VAPID keys must be provided in environment variables for production");
-    } catch (error) {
-      console.error("Failed to generate VAPID keys:", error.message);
-      throw new Error("Unable to generate VAPID keys. Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables.");
-    }
-  }
-
-  // Basic validation for VAPID keys
+// OneSignal Push Notification Helper
+async function sendOneSignalPushNotification(
+  appId: string,
+  apiKey: string,
+  externalUserIds: string[],
+  notificationData: any
+): Promise<boolean> {
   try {
-    const normalizedPublicKey = validateAndNormalizeVAPIDKey(publicKey, "public");
-    const normalizedPrivateKey = validateAndNormalizeVAPIDKey(privateKey, "private");
+    const payload = {
+      app_id: appId,
+      include_external_user_ids: externalUserIds,
+      headings: { en: notificationData.title },
+      contents: { en: notificationData.body },
+      data: {
+        url: notificationData.url,
+        appointmentId: notificationData.appointmentId,
+        type: notificationData.type,
+        customerPhone: notificationData.customerPhone
+      },
+      url: notificationData.url,
+      web_url: notificationData.url
+    };
 
-    console.log("VAPID keys validated and normalized successfully");
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-    return { publicKey: normalizedPublicKey, privateKey: normalizedPrivateKey };
-  } catch (error) {
-    console.error("VAPID key validation failed:", error.message);
-    throw new Error("Invalid VAPID keys. Please check VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY environment variables.");
-  }
-}
+    const result = await response.json();
 
-// Enhanced VAPID key validation and normalization
-function validateAndNormalizeVAPIDKey(key: string, type: "public" | "private"): string {
-  if (!key || typeof key !== "string") {
-    throw new Error(`INVALID VAPID_${type.toUpperCase()}_KEY - Key is empty or not a string`);
-  }
-
-  // Remove any whitespace
-  let cleanKey = key.trim();
-
-  // Check if it's already in base64url format
-  if (isValidBase64Url(cleanKey)) {
-    console.log(`${type} key is already valid base64url format`);
-    return cleanKey;
-  }
-
-  // Try to convert from standard base64 to base64url
-  try {
-    const base64urlKey = normalizeBase64ToBase64Url(cleanKey);
-    if (isValidBase64Url(base64urlKey)) {
-      console.log(`${type} key converted from base64 to base64url format`);
-      return base64urlKey;
+    if (!response.ok) {
+      console.error('OneSignal API error:', result);
+      return false;
     }
-  } catch (error) {
-    console.warn(`Failed to convert ${type} key from base64 to base64url:`, error.message);
+
+    console.log(`✅ OneSignal notification sent successfully. Recipients: ${result.recipients || 0}`);
+    return true;
+
+  } catch (error: any) {
+    console.error('OneSignal push notification error:', error.message);
+    return false;
   }
-
-  // If all else fails, throw a detailed error
-  throw new Error(`INVALID VAPID_${type.toUpperCase()}_KEY - Must be valid base64url format. Key provided: ${cleanKey.substring(0, 20)}...`);
 }
 
-// Convert standard base64 to base64url format
-function normalizeBase64ToBase64Url(base64String: string): string {
-  // Remove any whitespace
-  let cleanBase64 = base64String.trim();
 
-  // Convert standard base64 to base64url
-  // Replace + with - and / with _
-  let base64url = cleanBase64.replace(/\+/g, '-').replace(/\//g, '_');
-
-  // Remove padding (=) as base64url doesn't use it
-  base64url = base64url.replace(/=+$/, '');
-
-  // Validate the result
-  if (!isValidBase64Url(base64url)) {
-    throw new Error(`Invalid base64url format for VAPID key: ${base64url.substring(0, 20)}...`);
-  }
-
-  return base64url;
-}
-
-// Validate base64url format
-function isValidBase64Url(str: string): boolean {
-  // base64url alphabet: A-Z, a-z, 0-9, -, _
-  const base64urlRegex = /^[A-Za-z0-9\-_]+$/;
-  return base64urlRegex.test(str);
-}
-
-// Initialize VAPID keys
-let VAPID_KEYS = getVAPIDKeys();
-let webPushConfigured = true; // Always true now since we handle keys directly
-console.log("Direct Web Push implementation initialized successfully");
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -354,13 +283,6 @@ function withCors(response: Response) {
   return response;
 }
 
-// API endpoint to get public key for frontend
-function handleGetPublicKey() {
-  return jsonResponse({
-    publicKey: VAPID_KEYS.publicKey,
-    message: "Using environment VAPID key"
-  });
-}
 
 async function findBusinessByWebhookSecret(webhookSecret: string) {
   if (!webhookSecret || !webhookSecret.startsWith('bus_')) {
@@ -492,134 +414,6 @@ function detectEditSource(payload: any, existingAppointment: any) {
   }
 
   return "webhook"; // Default to webhook for admin/team edits
-}
-
-// Direct Web Push implementation using Web Crypto API
-async function createVAPIDJWT(audience: string, expiration: number): Promise<string> {
-  const header = {
-    alg: 'ES256',
-    typ: 'JWT'
-  };
-
-  const payload = {
-    aud: audience,
-    exp: expiration,
-    sub: 'mailto:notifications@yourapp.com'
-  };
-
-  const encoder = new TextEncoder();
-  const headerB64 = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const payloadB64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-  const message = `${headerB64}.${payloadB64}`;
-
-  // Import private key for signing
-  const privateKeyData = Uint8Array.from(atob(VAPID_KEYS.privateKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-  const privateKey = await crypto.subtle.importKey(
-    'pkcs8',
-    privateKeyData,
-    {
-      name: 'ECDSA',
-      namedCurve: 'P-256'
-    },
-    false,
-    ['sign']
-  );
-
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    privateKey,
-    encoder.encode(message)
-  );
-
-  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-  return `${message}.${signatureB64}`;
-}
-
-async function encryptPayload(subscription: any, payload: string): Promise<{ ciphertext: ArrayBuffer; salt: Uint8Array }> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(payload);
-
-  // Generate server key
-  const serverKey = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt']
-  );
-
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-
-  // Import subscription p256dh key
-  const p256dhKeyData = Uint8Array.from(atob(subscription.keys.p256dh.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-  const p256dhKey = await crypto.subtle.importKey(
-    'raw',
-    p256dhKeyData,
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    []
-  );
-
-  const authSecret = Uint8Array.from(atob(subscription.keys.auth.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-
-  // Generate ECDH key pair for deriving shared secret
-  const ecdhKeyPair = await crypto.subtle.generateKey(
-    { name: 'ECDH', namedCurve: 'P-256' },
-    true,
-    ['deriveKey']
-  );
-
-  // Derive shared secret using HKDF
-  const sharedSecret = await crypto.subtle.deriveKey(
-    { name: 'ECDH', public: p256dhKey },
-    ecdhKeyPair.privateKey,
-    { name: 'HKDF', hash: 'SHA-256', salt: authSecret, info: encoder.encode('Content-Encoding: auth\0') },
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt']
-  );
-
-  // Encrypt the payload
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    sharedSecret,
-    data
-  );
-
-  return { ciphertext, salt };
-}
-
-async function sendWebPushNotification(subscription: any, payload: string): Promise<boolean> {
-  try {
-    const endpoint = new URL(subscription.endpoint);
-    const audience = `${endpoint.protocol}//${endpoint.host}`;
-
-    // Create VAPID JWT
-    const expiration = Math.floor(Date.now() / 1000) + 86400; // 24 hours
-    const jwt = await createVAPIDJWT(audience, expiration);
-
-    // Encrypt payload
-    const { ciphertext, salt } = await encryptPayload(subscription, payload);
-
-    // Send the request
-    const response = await fetch(subscription.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Encoding': 'aesgcm',
-        'Authorization': `WebPush ${jwt}`,
-        'TTL': '2419200', // 28 days
-        'Urgency': 'normal'
-      },
-      body: ciphertext
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Web push notification error:', error);
-    return false;
-  }
 }
 
 
@@ -787,55 +581,33 @@ class NotificationService {
 
   async sendPushNotification(subscription: any, notificationData: any) {
     try {
-      // Create cross-platform notification payload
-      const payload = JSON.stringify({
-        // Basic notification data
-        title: notificationData.title,
-        body: notificationData.body,
+      // Send push notification using OneSignal REST API
 
-        // Android Notification Drawer specific
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/badge-72x72.png",
-        image: "/icons/icon-512x512.png", // Android large icon
-        vibrate: [200, 100, 200], // Android vibration pattern
+      const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
+      const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
 
-        // iOS Notification Center specific
-        sound: "default", // iOS sound
-        badge: 1, // iOS app badge increment
+      if (!oneSignalAppId || !oneSignalApiKey) {
+        console.error("OneSignal APP ID or API Key not configured");
+        return { success: false, error: "OneSignal APP ID or API Key not configured" };
+      }
 
-        // Cross-platform actions
-        actions: [
-          { action: "view", title: "View Appointment" },
-          { action: "call", title: "Call Customer" }
-        ],
+      // Assumes subscription contains user external ID for OneSignal
+      const userExternalId = subscription.user_external_id;
 
-        // Deep linking data
-        data: {
-          url: notificationData.url,
-          appointmentId: notificationData.appointmentId,
-          customerPhone: notificationData.customerPhone,
-          type: notificationData.type
-        },
+      if (!userExternalId) {
+        console.error("Subscription missing user external ID for OneSignal");
+        return { success: false, error: "Missing user external ID for OneSignal" };
+      }
 
-        // Keep notification visible until dismissed
-        requireInteraction: true,
-
-        // Group similar notifications
-        tag: 'appointment-alert'
-      });
-
-      const success = await sendWebPushNotification(subscription, payload);
+      const success = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData);
 
       if (!success) {
-        throw new Error('Failed to send web push notification');
+        throw new Error('Failed to send OneSignal push notification');
       }
 
       return { success: true, subscriptionId: subscription.id };
     } catch (error: any) {
       console.error(`Push notification failed for subscription ${subscription.id}:`, error.message);
-
-      // For direct implementation, we can't easily detect 410 errors
-      // You might want to implement retry logic or subscription cleanup based on response codes
 
       return { success: false, error: error.message, subscriptionId: subscription.id };
     }
@@ -1170,19 +942,16 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Get public key for frontend
-  if (req.method === "GET" && url.pathname.endsWith("/vapid-public-key")) {
-    const response = handleGetPublicKey();
-    return withCors(response);
-  }
-
   // Health check endpoint for diagnostics
   if (req.method === "GET" && url.pathname.endsWith("/health")) {
+    const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
+    const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
+    
     return jsonResponse({
       status: "healthy",
       timestamp: new Date().toISOString(),
-      vapid_keys_loaded: true,
-      web_push_configured: webPushConfigured
+      onesignal_configured: !!(oneSignalAppId && oneSignalApiKey),
+      smtp_configured: emailService.isConfigured()
     });
   }
 
@@ -1374,36 +1143,72 @@ serve(async (req) => {
   }
 
   // Main webhook endpoint for direct WordPress SSA calls
-  if (req.method === "POST" && url.pathname.endsWith("/ssa-appointments")) {
+if (req.method === "POST" && url.pathname.endsWith("/ssa-appointments")) {
     try {
       const payload = await req.json();
 
-      // Extract webhook token from payload
-      const webhookToken = payload.signature?.token;
-
-      if (!webhookToken) {
-        const response = jsonResponse({
-          error: "Missing webhook token in payload"
-        }, 401);
-        return withCors(response);
+      // Log all request headers for debugging
+      console.log("Received webhook headers:");
+      for (const [key, value] of req.headers.entries()) {
+        console.log(`  ${key}: ${value}`);
       }
 
-      // Find business by webhook token (matches your WEBHOOK_TOKEN env var)
-      const { data: business, error } = await supabase
-        .from("businesses")
-        .select("id, name, webhook_secret")
-        .eq("webhook_secret", webhookToken)
-        .single();
+      // Check for 'x-business-id' header for business identification
+      const headerBusinessId = req.headers.get("x-business-id");
 
-      if (error || !business) {
-        console.error("Business not found for webhook token:", webhookToken);
-        const response = jsonResponse({
-          error: "Invalid webhook token"
-        }, 401);
-        return withCors(response);
+      console.log(`x-business-id header present: ${headerBusinessId ? 'Yes (' + headerBusinessId + ')' : 'No'}`);
+
+      let business;
+
+      if (headerBusinessId) {
+        // Verify business exists with this ID
+        const { data, error } = await supabase
+          .from("businesses")
+          .select("id, name, webhook_secret")
+          .eq("id", headerBusinessId)
+          .single();
+
+        if (error || !data) {
+          console.error("Business not found for x-business-id header:", headerBusinessId);
+          const response = jsonResponse({
+            error: "Invalid business ID in header"
+          }, 401);
+          return withCors(response);
+        }
+
+        business = data;
+        console.log(`Processing main webhook for business from header: ${business.name} (${business.id})`);
+      } else {
+        // Extract webhook token from payload if header absent
+        const webhookToken = payload.signature?.token;
+
+        console.log(`Payload signature.token present: ${webhookToken ? 'Yes (' + webhookToken + ')' : 'No'}`);
+
+        if (!webhookToken) {
+          const response = jsonResponse({
+            error: "Missing webhook token in payload and x-business-id header"
+          }, 401);
+          return withCors(response);
+        }
+
+        // Find business by webhook token (matches your WEBHOOK_TOKEN env var)
+        const { data, error } = await supabase
+          .from("businesses")
+          .select("id, name, webhook_secret")
+          .eq("webhook_secret", webhookToken)
+          .single();
+
+        if (error || !data) {
+          console.error("Business not found for webhook token:", webhookToken);
+          const response = jsonResponse({
+            error: "Invalid webhook token"
+          }, 401);
+          return withCors(response);
+        }
+
+        business = data;
+        console.log(`Processing main webhook for business from token: ${business.name} (${business.id})`);
       }
-
-      console.log(`Processing main webhook for business: ${business.name} (${business.id})`);
 
       // Process the webhook with the found business
       const result = await handleWebhook(payload, business.id);
@@ -1423,7 +1228,6 @@ serve(async (req) => {
     error: "Not found",
     message: "SSA webhook endpoints only",
     supported_endpoints: [
-      "GET /vapid-public-key",
       "GET /health",
       "POST /test-notification",
       "POST /test-smtp",

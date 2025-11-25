@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Bell, CheckCircle, AlertCircle } from "lucide-react";
 
 export function NotificationSettings() {
-  const { isSupported, isSubscribed } = usePushNotifications();
+  const { isSupported, isSubscribed, subscribe, unsubscribe, isLoading } =
+    usePushNotifications();
   const [notificationPreferences, setNotificationPreferences] = useState({
     appointmentReminders: true,
     statusChanges: true,
@@ -20,6 +21,14 @@ export function NotificationSettings() {
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const handleToggleNotifications = async () => {
+    if (isSubscribed) {
+      await unsubscribe();
+    } else {
+      await subscribe();
+    }
   };
 
   if (!isSupported) {
@@ -52,23 +61,42 @@ export function NotificationSettings() {
         </div>
       )}
 
-      <div className="space-y-3">
-        {Object.entries(notificationPreferences).map(([key, value]) => (
-          <label
-            key={key}
-            className="flex items-center gap-3 p-3 hover:bg-slate-50 rounded cursor-pointer"
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Push Notifications</h4>
+            <p className="text-sm text-slate-600">
+              Receive notifications about appointments and updates
+            </p>
+          </div>
+          <Button
+            onClick={handleToggleNotifications}
+            disabled={isLoading}
+            variant={isSubscribed ? "outline" : "default"}
+            size="sm"
           >
-            <input
-              type="checkbox"
-              checked={value}
-              onChange={() => handlePreferenceChange(key)}
-              className="w-4 h-4 rounded"
-            />
-            <span className="text-sm font-medium capitalize">
-              {key.replace(/([A-Z])/g, " $1").trim()}
-            </span>
-          </label>
-        ))}
+            {isLoading ? "..." : isSubscribed ? "Disable" : "Enable"}
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          {Object.entries(notificationPreferences).map(([key, value]) => (
+            <label
+              key={key}
+              className="flex items-center gap-3 p-3 hover:bg-slate-50 rounded cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={value}
+                onChange={() => handlePreferenceChange(key)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-sm font-medium capitalize">
+                {key.replace(/([A-Z])/g, " $1").trim()}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <Button size="lg" variant="default" className="w-full mt-4">

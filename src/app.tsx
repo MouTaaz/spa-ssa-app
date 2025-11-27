@@ -79,6 +79,10 @@ export function App() {
             await navigator.serviceWorker.register("/sw.js", {
               scope: "/",
             });
+            console.log("Service Worker registered successfully");
+
+            // Initialize OneSignal after service worker is registered
+            await initializeOneSignal(user?.id);
           } catch (error) {
             console.log("SW registration failed: ", error);
           }
@@ -101,24 +105,6 @@ export function App() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
-
-  // Update OneSignal external user ID when user changes
-  useEffect(() => {
-    const updateOneSignalUser = async () => {
-      if (user?.id) {
-        try {
-          // Import OneSignal dynamically to avoid issues
-          const OneSignal = (await import("react-onesignal")).default;
-          await OneSignal.login(user.id);
-          console.log("OneSignal external user ID set:", user.id);
-        } catch (error) {
-          console.error("Failed to set OneSignal external user ID:", error);
-        }
-      }
-    };
-
-    updateOneSignalUser();
   }, [user?.id]);
 
   return (

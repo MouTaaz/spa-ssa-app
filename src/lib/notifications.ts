@@ -1,5 +1,12 @@
 import { supabase } from "./supabase"
 
+// Declare OneSignal on window to satisfy TypeScript
+declare global {
+  interface Window {
+    OneSignal?: any
+  }
+}
+
 // Load OneSignal SDK dynamically
 let OneSignal: any = null
 
@@ -41,6 +48,16 @@ const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesigna
 
 export async function initializeOneSignal(userId?: string) {
   try {
+
+        // Ensure service worker is registered before initializing OneSignal
+    if ('serviceWorker' in navigator) {
+      try {
+        await navigator.serviceWorker.ready
+        console.log('Service worker is ready, initializing OneSignal')
+      } catch (error) {
+        console.warn('Service worker not ready, proceeding anyway:', error)
+      }
+    }
     const oneSignal = await loadOneSignal()
 
     // Initialize OneSignal

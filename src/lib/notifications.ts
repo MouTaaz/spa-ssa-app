@@ -144,7 +144,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
         user_agent: navigator.userAgent,
         updated_at: new Date().toISOString(),
       }, {
-        onConflict: 'user_id'
+        onConflict: 'onesignal_player_id'
       })
 
     if (error) {

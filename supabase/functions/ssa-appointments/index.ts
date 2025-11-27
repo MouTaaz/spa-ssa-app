@@ -215,13 +215,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 async function sendOneSignalPushNotification(
   appId: string,
   apiKey: string,
-  externalUserIds: string[],
-  notificationData: any
+  ids: string[],
+  notificationData: any,
+  options?: { usePlayerIds?: boolean }
 ): Promise<{ ok: boolean; status: number; body: any }> {
   try {
-    const payload = {
+    const payloadBase: any = {
       app_id: appId,
-      include_external_user_ids: externalUserIds,
       headings: { en: notificationData.title },
       contents: { en: notificationData.body },
       data: {
@@ -233,6 +233,11 @@ async function sendOneSignalPushNotification(
       url: notificationData.url,
       web_url: notificationData.url
     };
+
+    // Use player ids (OneSignal's device/player ids) or external_user_ids depending on what we have
+    const payload = options?.usePlayerIds
+      ? { ...payloadBase, include_player_ids: ids }
+      : { ...payloadBase, include_external_user_ids: ids };
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
@@ -590,7 +595,8 @@ class NotificationService {
       // Send push notification using OneSignal REST API
 
       const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
-      const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
+      // Accept either ONESIGNAL_API_KEY or ONESIGNAL_REST_API_KEY (existing secret name)
+      const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY") || Deno.env.get("ONESIGNAL_REST_API_KEY");
 
       if (!oneSignalAppId || !oneSignalApiKey) {
         console.error("OneSignal APP ID or API Key not configured");
@@ -598,14 +604,29 @@ class NotificationService {
       }
 
       // Accept multiple possible field names that might hold the OneSignal player/external id
-      const userExternalId = subscription.user_external_id || subscription.onesignal_player_id || subscription.one_signal_player_id || subscription.onesignal_external_id || null;
+      let userExternalId: string | null = null;
+      let isPlayerId = false;
+
+      if (subscription.onesignal_player_id) {
+        userExternalId = subscription.onesignal_player_id;
+        isPlayerId = true;
+      } else if (subscription.one_signal_player_id) {
+        userExternalId = subscription.one_signal_player_id;
+        isPlayerId = true;
+      } else if (subscription.user_external_id) {
+        userExternalId = subscription.user_external_id;
+      } else if (subscription.onesignal_external_user_id) {
+        userExternalId = subscription.onesignal_external_user_id;
+      } else if (subscription.onesignal_external_id) {
+        userExternalId = subscription.onesignal_external_id;
+      }
 
       if (!userExternalId) {
-        console.error("Subscription missing OneSignal identifier (user_external_id / onesignal_player_id)");
+        console.error("Subscription missing OneSignal identifier (user_external_id / onesignal_player_id / onesignal_external_user_id)");
         return { success: false, error: "Missing OneSignal id", providerResponse: null, subscriptionId: subscription.id };
       }
 
-      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData);
+      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData, { usePlayerIds: isPlayerId });
 
       if (!sendResult.ok) {
         console.error(`OneSignal send failed for subscription ${subscription.id}:`, sendResult.body);

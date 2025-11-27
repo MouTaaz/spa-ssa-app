@@ -1,13 +1,50 @@
 import { supabase } from "./supabase"
-import OneSignal from 'react-onesignal'
+
+// Load OneSignal SDK dynamically
+let OneSignal: any = null
+
+async function loadOneSignal() {
+  if (OneSignal) return OneSignal
+
+  if (!window.OneSignal) {
+    // Load OneSignal SDK
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
+      script.async = true
+      script.onload = resolve
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+
+    // Wait for OneSignal to be available
+    await new Promise(resolve => {
+      const checkOneSignal = () => {
+        if (window.OneSignal) {
+          OneSignal = window.OneSignal
+          resolve(void 0)
+        } else {
+          setTimeout(checkOneSignal, 100)
+        }
+      }
+      checkOneSignal()
+    })
+  } else {
+    OneSignal = window.OneSignal
+  }
+
+  return OneSignal
+}
 
 // OneSignal App ID - should be set as environment variable
 const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesignal-app-id'
 
 export async function initializeOneSignal(userId?: string) {
   try {
+    const oneSignal = await loadOneSignal()
+
     // Initialize OneSignal
-    await OneSignal.init({
+    await oneSignal.init({
       appId: ONESIGNAL_APP_ID,
       serviceWorkerPath: '/OneSignalSDKWorker.js',
       serviceWorkerParam: { scope: '/' },
@@ -16,7 +53,7 @@ export async function initializeOneSignal(userId?: string) {
 
     // Set external user ID if user is logged in
     if (userId) {
-      await OneSignal.login(userId)
+      await oneSignal.login(userId)
     }
 
     console.log('OneSignal initialized successfully')
@@ -47,6 +84,8 @@ export async function requestNotificationPermission() {
 
 export async function subscribeToPushNotifications(userId: string): Promise<boolean> {
   try {
+    const oneSignal = await loadOneSignal()
+
     // Request notification permission
     const permissionGranted = await requestNotificationPermission()
     if (!permissionGranted) {
@@ -55,10 +94,10 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
     }
 
     // Show native prompt for push notifications
-    await OneSignal.Slidedown.promptPush()
+    await oneSignal.Slidedown.promptPush()
 
     // Wait for subscription to be ready
-    const isSubscribed = await OneSignal.User.PushSubscription.optedIn
+    const isSubscribed = await oneSignal.User.PushSubscription.optedIn
     if (isSubscribed) {
       // Save subscription to database
       await saveOneSignalSubscription(userId)
@@ -74,10 +113,23 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
 
 export async function saveOneSignalSubscription(userId: string): Promise<boolean> {
   try {
-    // Get OneSignal Player ID
-    const playerId = await OneSignal.User.PushSubscription.id
+    const oneSignal = await loadOneSignal()
+
+    // Get OneSignal Player ID with retry logic
+    let playerId = await oneSignal.User.PushSubscription.id
+    let attempts = 0
+    const maxAttempts = 5
+
+    // Retry getting player ID if it's null (OneSignal might need time to initialize)
+    while (!playerId && attempts < maxAttempts) {
+      console.log(`Waiting for OneSignal Player ID... (attempt ${attempts + 1}/${maxAttempts})`)
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+      playerId = await oneSignal.User.PushSubscription.id
+      attempts++
+    }
+
     if (!playerId) {
-      console.log("No OneSignal Player ID available yet")
+      console.error("OneSignal Player ID not available after retries")
       return false
     }
 
@@ -100,7 +152,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
       return false
     }
 
-    console.log("✅ OneSignal subscription saved to database")
+    console.log("✅ OneSignal subscription saved to database with Player ID:", playerId)
     return true
   } catch (error) {
     console.error("Error saving OneSignal subscription:", error)
@@ -110,8 +162,10 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
 export async function unsubscribeFromPushNotifications(userId: string): Promise<boolean> {
   try {
+    const oneSignal = await loadOneSignal()
+
     // Opt out from push notifications
-    await OneSignal.User.PushSubscription.optOut()
+    await oneSignal.User.PushSubscription.optOut()
 
     // Remove from database
     const { error } = await supabase
@@ -135,7 +189,8 @@ export async function unsubscribeFromPushNotifications(userId: string): Promise<
 
 export async function checkOneSignalSubscriptionStatus(): Promise<boolean> {
   try {
-    const isSubscribed = await OneSignal.User.PushSubscription.optedIn
+    const oneSignal = await loadOneSignal()
+    const isSubscribed = await oneSignal.User.PushSubscription.optedIn
     return isSubscribed || false
   } catch (error) {
     console.error("Error checking OneSignal subscription status:", error)

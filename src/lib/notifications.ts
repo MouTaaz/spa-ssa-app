@@ -9,6 +9,7 @@ declare global {
 
 // Load OneSignal SDK dynamically
 let OneSignal: any = null
+let isInitialized = false
 
 async function loadOneSignal() {
   if (OneSignal) return OneSignal
@@ -48,8 +49,17 @@ const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesigna
 
 export async function initializeOneSignal(userId?: string) {
   try {
+    // Check if already initialized
+    if (isInitialized) {
+      // If userId provided and different from current, update it
+      if (userId) {
+        const oneSignal = await loadOneSignal()
+        await oneSignal.login(userId)
+      }
+      return true
+    }
 
-        // Ensure service worker is registered before initializing OneSignal
+    // Ensure service worker is registered before initializing OneSignal
     if ('serviceWorker' in navigator) {
       try {
         await navigator.serviceWorker.ready
@@ -73,6 +83,7 @@ export async function initializeOneSignal(userId?: string) {
       await oneSignal.login(userId)
     }
 
+    isInitialized = true
     console.log('OneSignal initialized successfully')
     return true
   } catch (error) {

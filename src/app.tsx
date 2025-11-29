@@ -105,7 +105,7 @@ export function App() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [user?.id]);
+  }, []);
 
   return (
     <BrowserRouter>

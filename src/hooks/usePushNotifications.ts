@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { subscribeToPushNotifications, unsubscribeFromPushNotifications, checkOneSignalSubscriptionStatus } from "@/lib/notifications"
-import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/useAuth"
 
 
@@ -34,6 +33,31 @@ export function usePushNotifications() {
       setIsSubscribed(subscribed)
     } catch (error) {
       console.error("Error checking OneSignal subscription status:", error)
+    }
+  }
+
+  const attemptReSubscription = async () => {
+    if (!user || !isSupported) return
+
+    try {
+      // Check if OneSignal is available and user is not already subscribed
+      if (window.OneSignal) {
+        const isEnabled = await window.OneSignal.isPushNotificationsEnabled()
+        if (!isEnabled) {
+          console.log("User is not subscribed to push notifications, attempting to re-subscribe...")
+          // Show the native prompt to re-subscribe
+          await window.OneSignal.showNativePrompt()
+          // After showing prompt, check again and register if successful
+          setTimeout(async () => {
+            const newIsEnabled = await window.OneSignal.isPushNotificationsEnabled()
+            if (newIsEnabled) {
+              await subscribe()
+            }
+          }, 1000)
+        }
+      }
+    } catch (error) {
+      console.error("Error during re-subscription attempt:", error)
     }
   }
 
@@ -78,6 +102,7 @@ export function usePushNotifications() {
     isSubscribed,
     isLoading,
     subscribe,
-    unsubscribe
+    unsubscribe,
+    attemptReSubscription
   }
 }

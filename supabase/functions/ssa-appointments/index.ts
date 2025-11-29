@@ -220,19 +220,24 @@ async function sendOneSignalPushNotification(
   options?: { usePlayerIds?: boolean }
 ): Promise<{ ok: boolean; status: number; body: any }> {
   try {
+    // Build base payload without root-level `url`/`web_url` to avoid OneSignal validation errors.
+    // Keep URL inside `data` with a different key name to avoid conflicts with OneSignal's root-level fields.
     const payloadBase: any = {
       app_id: appId,
       headings: { en: notificationData.title },
       contents: { en: notificationData.body },
       data: {
-        url: notificationData.url,
+        appointmentUrl: notificationData.url, // Rename to avoid conflict with OneSignal's 'url' field
         appointmentId: notificationData.appointmentId,
         type: notificationData.type,
         customerPhone: notificationData.customerPhone
-      },
-      url: notificationData.url,
-      web_url: notificationData.url
+      }
     };
+
+    // Add web_url only when notificationData.url is an absolute http(s) URL
+    if (notificationData.url && /^https?:\/\//i.test(String(notificationData.url))) {
+      payloadBase.web_url = notificationData.url;
+    }
 
     // Use player ids (OneSignal's device/player ids) or external_user_ids depending on what we have
     const payload = options?.usePlayerIds
@@ -373,8 +378,24 @@ function mapSourceToCompatibleValue(source: string) {
 }
 
 async function createHistoryRecord(appointmentExternalId: string, action: string, previousData: any, newData: any, source = "webhook") {
-  // Map action to match React component (always use "EDIT" for edits)
-  const standardizedAction = action === "edited" ? "EDIT" : action.toUpperCase();
+  // Map action to match schema constraints exactly - only use allowed values
+  const actionMapping: Record<string, string> = {
+    "edited": "EDIT",
+    "canceled": "CANCEL",
+    "cancelled": "CANCELLED",
+    "rescheduled": "RESCHEDULE",
+    "booked": "BOOKED",
+    "create": "CREATE",
+    "update": "UPDATE",
+    // Additional mappings to prevent fallback toUpperCase issues
+    "cancel": "CANCEL",
+    "reschedule": "RESCHEDULE",
+    "cancelled": "CANCELLED",
+    "rescheduled": "RESCHEDULE"
+  };
+
+  const standardizedAction = actionMapping[action.toLowerCase()] || "UPDATE"; // Default to UPDATE if unknown
+
   // Map source values to be consistent with React component
   const compatibleSource = mapSourceToCompatibleValue(source);
 
@@ -480,11 +501,12 @@ class NotificationService {
         userMap.set(profile.id, { email: profile.email });
       });
 
-      // Get push subscriptions for these users
+      // Get active push subscriptions for these users
       const { data: subscriptions, error: subsError } = await supabase
         .from("push_subscriptions")
         .select("*")
-        .in("user_id", userIds);
+        .in("user_id", userIds)
+        .eq("push_active", true);
 
       if (subsError) {
         console.error("Error fetching push subscriptions:", subsError);
@@ -530,6 +552,9 @@ class NotificationService {
 
       let pushSuccess = false;
       let emailSuccess = false;
+      let providerResponse: any = null;
+      let subscriptionIdForLog: string | null = null;
+      let pushError: string | null = null;
 
       // 1. Try push notification first (immediate delivery)
       if (userSubscriptions.length > 0) {
@@ -537,10 +562,28 @@ class NotificationService {
         const pushResults = await Promise.allSettled(
           userSubscriptions.map((sub) => this.sendPushNotification(sub, notificationData))
         );
-        pushSuccess = pushResults.some(result => result.status === 'fulfilled' && result.value.success);
+        
+        // Check push results and capture provider response
+        for (const result of pushResults) {
+          if (result.status === 'fulfilled') {
+            if (result.value && result.value.subscriptionId) subscriptionIdForLog = result.value.subscriptionId;
+          }
+
+          if (result.status === 'fulfilled' && result.value.success) {
+            pushSuccess = true;
+            providerResponse = result.value.providerResponse;
+            if (result.value.subscriptionId) subscriptionIdForLog = result.value.subscriptionId;
+            break;
+          } else if (result.status === 'fulfilled' && result.value && result.value.providerResponse) {
+            // Capture provider response even if failed
+            providerResponse = result.value.providerResponse;
+            pushError = result.value.error || 'Push notification failed';
+          }
+        }
       }
 
       // 2. Send email notification (reliable fallback)
+      let emailError: string | null = null;
       if (userProfile?.email && emailService.isConfigured()) {
         console.log(`📧 Sending email notification to ${userProfile.email}`);
         const action = this.getActionFromNotificationType(notificationData.type);
@@ -555,6 +598,7 @@ class NotificationService {
         );
       } else if (!userProfile?.email) {
         console.log(`⚠️ No email address found for user ${userId}`);
+        emailError = 'No email address configured';
       }
 
       results.push({
@@ -562,7 +606,10 @@ class NotificationService {
         pushSuccess,
         emailSuccess,
         pushSubscriptions: userSubscriptions.length,
-        hasEmail: !!userProfile?.email
+        hasEmail: !!userProfile?.email,
+        providerResponse: providerResponse,
+        subscriptionId: subscriptionIdForLog,
+        error: pushError || emailError || (pushSuccess || emailSuccess ? null : 'No notification sent')
       });
     }
 
@@ -630,7 +677,34 @@ class NotificationService {
 
       if (!sendResult.ok) {
         console.error(`OneSignal send failed for subscription ${subscription.id}:`, sendResult.body);
+
+        // If OneSignal reports invalid player ids, mark subscription as inactive to avoid repeated failures
+        try {
+          const invalidIds = sendResult.body?.errors?.invalid_player_ids;
+          if (Array.isArray(invalidIds) && invalidIds.length) {
+            console.log(`OneSignal reported invalid_player_ids for subscription ${subscription.id}:`, invalidIds);
+            const { error: clearError } = await supabase
+              .from('push_subscriptions')
+              .update({ push_active: false })
+              .eq('id', subscription.id);
+            if (clearError) {
+              console.error(`Failed to deactivate subscription ${subscription.id}:`, clearError);
+            } else {
+              console.log(`Deactivated subscription ${subscription.id} due to invalid player id`);
+            }
+          }
+        } catch (e) {
+          console.error('Error while handling invalid_player_ids cleanup:', e);
+        }
+
         return { success: false, error: 'Failed to send OneSignal push notification', providerResponse: sendResult.body, subscriptionId: subscription.id };
+      }
+
+      // Log provider response for diagnostics
+      try {
+        console.log(`OneSignal send result for subscription ${subscription.id}:`, JSON.stringify(sendResult.body));
+      } catch (e) {
+        console.log(`OneSignal send result for subscription ${subscription.id}: (non-JSON response)`);
       }
 
       return { success: true, subscriptionId: subscription.id, providerResponse: sendResult.body };
@@ -644,24 +718,33 @@ class NotificationService {
     try {
       const logs = results.map((result) => ({
         user_id: result.userId,
+        subscription_id: result.subscriptionId || null,
         business_id: businessId,
         notification_type: notificationData.type,
         title: notificationData.title,
         body: notificationData.body,
         data: {
-          url: notificationData.url,
-          appointmentId: notificationData.appointmentId
+          appointmentUrl: notificationData.url,
+          appointmentId: notificationData.appointmentId,
+          providerResponse: result.providerResponse // Store in data field instead
         },
         status: result.pushSuccess || result.emailSuccess ? 'sent' : 'failed',
         error_message: !result.pushSuccess && !result.emailSuccess ? (result.error || 'Both push and email failed') : null,
-        provider_response: result.providerResponse || null,
         sent_at: new Date().toISOString(),
         delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
       }));
+      // Diagnostic: log the payload we're about to insert
+      try {
+        console.log('Inserting notification_logs entries:', JSON.stringify(logs));
+      } catch (e) {
+        console.log('Inserting notification_logs entries: (unable to stringify logs)');
+      }
 
-      const { error } = await supabase.from("notification_logs").insert(logs);
-      if (error) {
-        console.error("Failed to log dual notifications:", error);
+      const insertResult = await supabase.from("notification_logs").insert(logs).select();
+      if ((insertResult as any).error) {
+        console.error("Failed to log dual notifications:", (insertResult as any).error);
+      } else {
+        console.log('Logged notification entries:', (insertResult as any).data || insertResult);
       }
     } catch (error) {
       console.error("Error in logDualNotifications:", error);
@@ -702,7 +785,7 @@ async function triggerAppointmentNotification(action: string, appointment: any, 
     notificationData.appointmentId = appointment.external_id;
     notificationData.customerPhone = appointment.customer_phone; // Add customer phone for call action
     console.log(`Triggering ${action} notification for business: ${businessId}`);
-    await notificationService.sendAppointmentNotification(businessId, notificationData);
+    await notificationService.sendAppointmentNotification(businessId, notificationData, appointment);
   }
 }
 
@@ -955,6 +1038,50 @@ async function handleWebhook(payload: any, businessId: string) {
   }
 }
 
+// Push registration endpoint -- upsert OneSignal ids for a user when client registers
+async function handlePushRegister(req: Request) {
+  try {
+    const body = await req.json();
+    const userId = body.userId || body.user_id;
+    const playerId = body.onesignal_player_id || body.playerId || body.player_id;
+    const externalId = body.onesignal_external_user_id || body.externalUserId || body.external_id;
+    const platform = body.platform || body.device || null;
+    const userAgent = body.userAgent || req.headers.get('user-agent') || null;
+
+    if (!userId || !playerId) {
+      return jsonResponse({ error: 'Missing userId or onesignal_player_id' }, 400);
+    }
+
+    // Upsert the push subscription by user_id. If a row exists, update the player id and timestamps.
+    const payload: any = {
+      user_id: userId,
+      onesignal_player_id: playerId,
+      onesignal_external_user_id: externalId || userId,
+      platform: platform,
+      user_agent: userAgent,
+      updated_at: new Date().toISOString()
+    };
+
+    // Use upsert on user_id to create or update the subscription row.
+    const { data, error } = await supabase
+      .from('push_subscriptions')
+      .upsert([payload], { onConflict: 'user_id' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to upsert push subscription:', error);
+      return jsonResponse({ success: false, error: 'Failed to register push subscription' }, 500);
+    }
+
+    console.log(`Registered push subscription for user ${userId}: player=${playerId}`);
+    return jsonResponse({ success: true, subscription: data });
+  } catch (err: any) {
+    console.error('Push register error:', err);
+    return jsonResponse({ success: false, error: err?.message || String(err) }, 500);
+  }
+}
+
 serve(async (req) => {
   const url = new URL(req.url);
 
@@ -1168,6 +1295,12 @@ serve(async (req) => {
         smtp_configured: emailService.isConfigured()
       }, 500);
     }
+  }
+
+  // Push registration endpoint for client to (re)register OneSignal ids
+  if (req.method === "POST" && url.pathname.endsWith("/push-register")) {
+    const result = await handlePushRegister(req);
+    return withCors(result);
   }
 
   // Main webhook endpoint for direct WordPress SSA calls

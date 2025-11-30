@@ -33,12 +33,26 @@ serve(async (request) => {
   if (request.method === "GET" && requestUrl.pathname.endsWith("/health")) {
     const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
     const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
+    const oneSignalRestApiKey = Deno.env.get("ONESIGNAL_REST_API_KEY");
+
+    console.log("🔍 DEBUG: Environment Variables Check");
+    console.log("ONESIGNAL_APP_ID:", oneSignalAppId ? "***SET***" : "***NOT SET***");
+    console.log("ONESIGNAL_API_KEY:", oneSignalApiKey ? "***SET***" : "***NOT SET***");
+    console.log("ONESIGNAL_REST_API_KEY:", oneSignalRestApiKey ? "***SET***" : "***NOT SET***");
+
+    const emailService = new EmailService();
+    console.log("SMTP_CONFIGURED:", emailService.isConfigured());
 
     return createJsonResponse({
       status: "healthy",
       timestamp: new Date().toISOString(),
       onesignal_configured: !!(oneSignalAppId && oneSignalApiKey),
-      smtp_configured: new EmailService().isConfigured()
+      smtp_configured: emailService.isConfigured(),
+      debug: {
+        onesignal_app_id_length: oneSignalAppId?.length || 0,
+        onesignal_api_key_length: oneSignalApiKey?.length || 0,
+        onesignal_rest_api_key_length: oneSignalRestApiKey?.length || 0
+      }
     });
   }
 
@@ -218,6 +232,10 @@ serve(async (request) => {
     try {
       const { userId, businessId } = await request.json();
 
+      console.log("🔍 DEBUG: Test Notification Request");
+      console.log("userId:", userId);
+      console.log("businessId:", businessId);
+
       if (!userId || !businessId) {
         return createJsonResponse({ error: "Missing userId or businessId" }, 400);
       }
@@ -227,6 +245,11 @@ serve(async (request) => {
         .from("push_subscriptions")
         .select("*")
         .eq("user_id", userId);
+
+      console.log("🔍 DEBUG: Push Subscriptions Query");
+      console.log("subscriptionsError:", subscriptionsError);
+      console.log("userSubscriptions count:", userSubscriptions?.length || 0);
+      console.log("userSubscriptions:", JSON.stringify(userSubscriptions, null, 2));
 
       if (subscriptionsError || !userSubscriptions?.length) {
         return createJsonResponse({ error: "No push subscriptions found for user" }, 404);
@@ -240,12 +263,18 @@ serve(async (request) => {
         appointmentId: "test"
       };
 
+      console.log("🔍 DEBUG: Test Notification Payload");
+      console.log(JSON.stringify(testNotificationPayload, null, 2));
+
       // Send test notification
       const emailService = new EmailService();
       const notificationService = new NotificationService(emailService);
       const notificationResults = await Promise.allSettled(
         userSubscriptions.map((subscription) => notificationService.sendPushNotification(subscription, testNotificationPayload))
       );
+
+      console.log("🔍 DEBUG: Notification Results");
+      console.log(JSON.stringify(notificationResults, null, 2));
 
       const successfulNotifications = notificationResults.filter((result) => result.status === 'fulfilled' && result.value.success).length;
 

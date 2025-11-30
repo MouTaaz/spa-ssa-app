@@ -21,6 +21,13 @@ export class EmailService {
     this.smtpPassword = Deno.env.get("SMTP_PASS") ?? "";
     this.smtpFromAddress = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
 
+    console.log("🔍 DEBUG: SMTP Environment Variables");
+    console.log("SMTP_HOST:", this.smtpHost || "***NOT SET***");
+    console.log("SMTP_PORT:", this.smtpPort);
+    console.log("SMTP_USER:", this.smtpUsername || "***NOT SET***");
+    console.log("SMTP_PASS:", this.smtpPassword ? "***SET***" : "***NOT SET***");
+    console.log("SMTP_FROM:", this.smtpFromAddress);
+
     // Validate SMTP configuration
     if (!this.smtpHost || !this.smtpUsername || !this.smtpPassword) {
       console.warn("⚠️ SMTP configuration incomplete - email notifications disabled");

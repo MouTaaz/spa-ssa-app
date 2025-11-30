@@ -1,5 +1,5 @@
 import { supabaseClient, createJsonResponse, addCorsHeaders, mapSourceToCompatibleValue, getChangedFields } from "./utils.ts";
-import { APPOINTMENT_ACTIONS, HISTORY_ACTIONS } from "./constants.ts";
+import { APPOINTMENT_ACTIONS, HISTORY_ACTIONS, NOTIFICATION_TYPES } from "./constants.ts";
 import { NotificationService } from "./notification-service.ts";
 import { EmailService } from "./email-service.ts";
 import type { WebhookPayload, AppointmentData, NotificationPayload } from "./types.ts";
@@ -188,6 +188,12 @@ export async function triggerAppointmentNotification(
   businessId: string,
   changedFields: string[]
 ) {
+  console.log("🔍 DEBUG: Trigger Appointment Notification");
+  console.log("actionType:", actionType);
+  console.log("appointmentData:", JSON.stringify(appointmentData, null, 2));
+  console.log("businessId:", businessId);
+  console.log("changedFields:", changedFields);
+
   // Map action types to notification templates
   const notificationTemplates: Record<string, NotificationPayload> = {
     booked: {
@@ -217,11 +223,17 @@ export async function triggerAppointmentNotification(
     notificationTemplate.url = `/appointments/${appointmentData.external_id}`;
     notificationTemplate.appointmentId = appointmentData.external_id;
     notificationTemplate.customerPhone = appointmentData.customer_phone; // Add customer phone for call action
+
+    console.log("🔍 DEBUG: Final Notification Template");
+    console.log(JSON.stringify(notificationTemplate, null, 2));
+
     console.log(`Triggering ${actionType} notification for business: ${businessId}`);
 
     const emailService = new EmailService();
     const notificationService = new NotificationService(emailService);
     await notificationService.sendAppointmentNotification(businessId, notificationTemplate, appointmentData);
+  } else {
+    console.log("🔍 DEBUG: No notification template found for actionType:", actionType);
   }
 }
 

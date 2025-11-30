@@ -3,38 +3,82 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
-// Email Service for SMTP integration
+/**
+ * Constants for appointment actions and notification types
+ */
+const APPOINTMENT_ACTIONS = {
+  BOOKED: 'booked',
+  EDITED: 'edited',
+  CANCELLED: 'cancelled',
+  RESCHEDULED: 'rescheduled'
+} as const;
+
+const NOTIFICATION_TYPES = {
+  APPOINTMENT_BOOKED: 'appointment_booked',
+  APPOINTMENT_EDITED: 'appointment_edited',
+  APPOINTMENT_CANCELLED: 'appointment_cancelled',
+  TEST_NOTIFICATION: 'test_notification'
+} as const;
+
+const HISTORY_ACTIONS = {
+  CREATE: 'CREATE',
+  EDIT: 'EDIT',
+  CANCEL: 'CANCEL',
+  CANCELLED: 'CANCELLED',
+  RESCHEDULE: 'RESCHEDULE',
+  BOOKED: 'BOOKED',
+  UPDATE: 'UPDATE'
+} as const;
+
+/**
+ * Email Service for SMTP integration
+ * Handles sending appointment-related emails with HTML templates
+ */
+/**
+ * Service class for handling SMTP email notifications
+ */
 class EmailService {
   private smtpHost: string;
   private smtpPort: number;
-  private smtpUser: string;
-  private smtpPass: string;
-  private smtpFrom: string;
+  private smtpUsername: string;
+  private smtpPassword: string;
+  private smtpFromAddress: string;
 
   constructor() {
     this.smtpHost = Deno.env.get("SMTP_HOST") ?? "";
     this.smtpPort = parseInt(Deno.env.get("SMTP_PORT") ?? "587");
-    this.smtpUser = Deno.env.get("SMTP_USER") ?? "";
-    this.smtpPass = Deno.env.get("SMTP_PASS") ?? "";
-    this.smtpFrom = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
+    this.smtpUsername = Deno.env.get("SMTP_USER") ?? "";
+    this.smtpPassword = Deno.env.get("SMTP_PASS") ?? "";
+    this.smtpFromAddress = Deno.env.get("SMTP_FROM") ?? "notifications@yourapp.com";
 
     // Validate SMTP configuration
-    if (!this.smtpHost || !this.smtpUser || !this.smtpPass) {
+    if (!this.smtpHost || !this.smtpUsername || !this.smtpPassword) {
       console.warn("⚠️ SMTP configuration incomplete - email notifications disabled");
     } else {
       console.log("✅ Email service configured successfully");
     }
   }
 
+  /**
+   * Check if SMTP is properly configured
+   */
   isConfigured(): boolean {
-    return !!(this.smtpHost && this.smtpUser && this.smtpPass);
+    return !!(this.smtpHost && this.smtpUsername && this.smtpPassword);
   }
 
+  /**
+   * Send an appointment notification email
+   * @param recipientEmail - Email address of the recipient
+   * @param emailSubject - Subject line of the email
+   * @param htmlBody - HTML content of the email
+   * @param textBody - Plain text fallback content
+   * @returns Promise<boolean> - True if email was sent successfully
+   */
   async sendAppointmentEmail(
-    toEmail: string,
-    subject: string,
-    htmlContent: string,
-    textContent: string
+    recipientEmail: string,
+    emailSubject: string,
+    htmlBody: string,
+    textBody: string
   ): Promise<boolean> {
     if (!this.isConfigured()) {
       console.warn("Email service not configured - skipping email notification");
@@ -42,57 +86,63 @@ class EmailService {
     }
 
     try {
-      // Create SMTP connection and send email
-      const emailData = {
-        to: toEmail,
-        from: this.smtpFrom,
-        subject: subject,
-        html: htmlContent,
-        text: textContent,
+      // Prepare email data structure
+      const emailPayload = {
+        to: recipientEmail,
+        from: this.smtpFromAddress,
+        subject: emailSubject,
+        html: htmlBody,
+        text: textBody,
       };
 
-      // Use fetch to send email via SMTP API (you can replace with actual SMTP library)
-      // For now, we'll use a simple SMTP implementation
-      const response = await this.sendViaSMTP(emailData);
+      // Send email via SMTP
+      const sendResult = await this.sendViaSMTP(emailPayload);
 
-      if (response) {
-        console.log(`✅ Email sent successfully to ${toEmail}`);
+      if (sendResult) {
+        console.log(`✅ Email sent successfully to ${recipientEmail}`);
         return true;
       } else {
-        console.error(`❌ Failed to send email to ${toEmail}`);
+        console.error(`❌ Failed to send email to ${recipientEmail}`);
         return false;
       }
     } catch (error) {
-      console.error(`Email service error for ${toEmail}:`, error);
+      console.error(`Email service error for ${recipientEmail}:`, error);
       return false;
     }
   }
 
-  private async sendViaSMTP(emailData: any): Promise<boolean> {
+  /**
+   * Send email via SMTP protocol
+   * @param emailPayload - Email data containing to, from, subject, html, and text
+   * @returns Promise<boolean> - True if SMTP send was successful
+   */
+  private async sendViaSMTP(emailPayload: any): Promise<boolean> {
     try {
-      const client = new SmtpClient();
+      const smtpClient = new SmtpClient();
 
-      await client.connect({
+      // Establish SMTP connection with authentication
+      await smtpClient.connect({
         hostname: this.smtpHost,
         port: this.smtpPort,
         tls: this.smtpPort === 465, // Use TLS for port 465, STARTTLS for others
         auth: {
-          username: this.smtpUser,
-          password: this.smtpPass,
+          username: this.smtpUsername,
+          password: this.smtpPassword,
         },
       });
 
-      await client.send({
-        from: this.smtpFrom,
-        to: emailData.to,
-        subject: emailData.subject,
-        content: emailData.text,
-        html: emailData.html,
+      // Send the email with both HTML and text content
+      await smtpClient.send({
+        from: this.smtpFromAddress,
+        to: emailPayload.to,
+        subject: emailPayload.subject,
+        content: emailPayload.text,
+        html: emailPayload.html,
       });
 
-      await client.close();
+      await smtpClient.close();
 
-      console.log(`📧 Email sent successfully via SMTP to ${emailData.to}`);
+      console.log(`📧 Email sent successfully via SMTP to ${emailPayload.to}`);
       return true;
     } catch (error) {
       console.error("SMTP send error:", error);
@@ -100,22 +150,30 @@ class EmailService {
     }
   }
 
-  generateAppointmentEmailHtml(appointment: any, action: string): { html: string; text: string } {
-    const actionTitles = {
+  /**
+   * Generate HTML and text email templates for appointment notifications
+   * @param appointmentData - Appointment object with customer and service details
+   * @param actionType - Type of appointment action (booked, edited, cancelled, rescheduled)
+   * @returns Object containing HTML and text versions of the email
+   */
+  generateAppointmentEmailHtml(appointmentData: any, actionType: string): { html: string; text: string } {
+    // Map action types to user-friendly titles
+    const actionTitleMap = {
       booked: "New Appointment Booked",
       edited: "Appointment Updated",
       cancelled: "Appointment Cancelled",
       rescheduled: "Appointment Rescheduled"
     };
 
-    const title = actionTitles[action as keyof typeof actionTitles] || "Appointment Update";
+    const emailTitle = actionTitleMap[actionType as keyof typeof actionTitleMap] || "Appointment Update";
 
-    const html = `
+    // Generate HTML email template
+    const htmlTemplate = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${title}</title>
+  <title>${emailTitle}</title>
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -132,7 +190,7 @@ class EmailService {
 <body>
   <div class="container">
     <div class="header">
-      <h1>${title}</h1>
+      <h1>${emailTitle}</h1>
       <p>SSA Appointment Management System</p>
     </div>
 
@@ -140,39 +198,39 @@ class EmailService {
       <div class="appointment-details">
         <div class="detail-row">
           <span class="label">Customer:</span>
-          <span class="value">${appointment.customer_name || 'N/A'}</span>
+          <span class="value">${appointmentData.customer_name || 'N/A'}</span>
         </div>
         <div class="detail-row">
           <span class="label">Service:</span>
-          <span class="value">${appointment.service_name || 'N/A'}</span>
+          <span class="value">${appointmentData.service_name || 'N/A'}</span>
         </div>
         <div class="detail-row">
           <span class="label">Date & Time:</span>
-          <span class="value">${appointment.start_time ? new Date(appointment.start_time).toLocaleString() : 'N/A'}</span>
+          <span class="value">${appointmentData.start_time ? new Date(appointmentData.start_time).toLocaleString() : 'N/A'}</span>
         </div>
         <div class="detail-row">
           <span class="label">Vehicle:</span>
-          <span class="value">${appointment.vehicle_make_model || 'N/A'}</span>
+          <span class="value">${appointmentData.vehicle_make_model || 'N/A'}</span>
         </div>
         <div class="detail-row">
           <span class="label">Location:</span>
-          <span class="value">${appointment.location || 'TBD'}</span>
+          <span class="value">${appointmentData.location || 'TBD'}</span>
         </div>
         <div class="detail-row">
           <span class="label">Phone:</span>
-          <span class="value">${appointment.customer_phone || 'N/A'}</span>
+          <span class="value">${appointmentData.customer_phone || 'N/A'}</span>
         </div>
-        ${appointment.customer_notes ? `
+        ${appointmentData.customer_notes ? `
         <div class="detail-row">
           <span class="label">Notes:</span>
-          <span class="value">${appointment.customer_notes}</span>
+          <span class="value">${appointmentData.customer_notes}</span>
         </div>
         ` : ''}
       </div>
 
       <div style="text-align: center; margin: 20px 0;">
-        <a href="${appointment.web_meeting_url || '#'}" class="action-button">View Appointment</a>
-        ${appointment.customer_phone ? `<a href="tel:${appointment.customer_phone}" class="action-button">Call Customer</a>` : ''}
+        <a href="${appointmentData.web_meeting_url || '#'}" class="action-button">View Appointment</a>
+        ${appointmentData.customer_phone ? `<a href="tel:${appointmentData.customer_phone}" class="action-button">Call Customer</a>` : ''}
       </div>
     </div>
 
@@ -184,90 +242,101 @@ class EmailService {
 </body>
 </html>`;
 
-    const text = `
-${title}
+    // Generate plain text email template (fallback for HTML clients)
+    const textTemplate = `
+${emailTitle}
 
-Customer: ${appointment.customer_name || 'N/A'}
-Service: ${appointment.service_name || 'N/A'}
-Date & Time: ${appointment.start_time ? new Date(appointment.start_time).toLocaleString() : 'N/A'}
-Vehicle: ${appointment.vehicle_make_model || 'N/A'}
-Location: ${appointment.location || 'TBD'}
-Phone: ${appointment.customer_phone || 'N/A'}
-${appointment.customer_notes ? `Notes: ${appointment.customer_notes}` : ''}
+Customer: ${appointmentData.customer_name || 'N/A'}
+Service: ${appointmentData.service_name || 'N/A'}
+Date & Time: ${appointmentData.start_time ? new Date(appointmentData.start_time).toLocaleString() : 'N/A'}
+Vehicle: ${appointmentData.vehicle_make_model || 'N/A'}
+Location: ${appointmentData.location || 'TBD'}
+Phone: ${appointmentData.customer_phone || 'N/A'}
+${appointmentData.customer_notes ? `Notes: ${appointmentData.customer_notes}` : ''}
 
-View appointment: ${appointment.web_meeting_url || 'Check your dashboard'}
-${appointment.customer_phone ? `Call customer: ${appointment.customer_phone}` : ''}
+View appointment: ${appointmentData.web_meeting_url || 'Check your dashboard'}
+${appointmentData.customer_phone ? `Call customer: ${appointmentData.customer_phone}` : ''}
 
 This is an automated notification from your SSA Appointment Management System.
 `;
 
-    return { html, text };
+    return { html: htmlTemplate, text: textTemplate };
   }
 }
 
 const emailService = new EmailService();
 
+// Supabase client configuration
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// OneSignal Push Notification Helper
+/**
+ * Send push notification via OneSignal REST API
+ * @param oneSignalAppId - OneSignal application ID
+ * @param oneSignalApiKey - OneSignal REST API key
+ * @param targetIds - Array of player IDs or external user IDs
+ * @param notificationPayload - Notification content and metadata
+ * @param config - Optional configuration for ID type
+ * @returns Promise with API response details
+ */
 async function sendOneSignalPushNotification(
-  appId: string,
-  apiKey: string,
-  ids: string[],
-  notificationData: any,
-  options?: { usePlayerIds?: boolean }
+  oneSignalAppId: string,
+  oneSignalApiKey: string,
+  targetIds: string[],
+  notificationPayload: any,
+  config?: { usePlayerIds?: boolean }
 ): Promise<{ ok: boolean; status: number; body: any }> {
   try {
     // Build base payload without root-level `url`/`web_url` to avoid OneSignal validation errors.
     // Keep URL inside `data` with a different key name to avoid conflicts with OneSignal's root-level fields.
-    const payloadBase: any = {
-      app_id: appId,
-      headings: { en: notificationData.title },
-      contents: { en: notificationData.body },
+    const basePayload: any = {
+      app_id: oneSignalAppId,
+      headings: { en: notificationPayload.title },
+      contents: { en: notificationPayload.body },
       data: {
-        appointmentUrl: notificationData.url, // Rename to avoid conflict with OneSignal's 'url' field
-        appointmentId: notificationData.appointmentId,
-        type: notificationData.type,
-        customerPhone: notificationData.customerPhone
+        appointmentUrl: notificationPayload.url, // Rename to avoid conflict with OneSignal's 'url' field
+        appointmentId: notificationPayload.appointmentId,
+        type: notificationPayload.type,
+        customerPhone: notificationPayload.customerPhone
       }
     };
 
-    // Add web_url only when notificationData.url is an absolute http(s) URL
-    if (notificationData.url && /^https?:\/\//i.test(String(notificationData.url))) {
-      payloadBase.web_url = notificationData.url;
+    // Add web_url only when notificationPayload.url is an absolute http(s) URL
+    if (notificationPayload.url && /^https?:\/\//i.test(String(notificationPayload.url))) {
+      basePayload.web_url = notificationPayload.url;
     }
 
-    // Use player ids (OneSignal's device/player ids) or external_user_ids depending on what we have
-    const payload = options?.usePlayerIds
-      ? { ...payloadBase, include_player_ids: ids }
-      : { ...payloadBase, include_external_user_ids: ids };
+    // Use player ids (OneSignal's device/player ids) or external_user_ids depending on configuration
+    const finalPayload = config?.usePlayerIds
+      ? { ...basePayload, include_player_ids: targetIds }
+      : { ...basePayload, include_external_user_ids: targetIds };
 
-    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+    // Send notification to OneSignal API
+    const apiResponse = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${apiKey}`
+        'Authorization': `Basic ${oneSignalApiKey}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(finalPayload)
     });
 
-    let resultBody: any = null;
+    let responseBody: any = null;
     try {
-      resultBody = await response.json();
-    } catch (err) {
-      // Non-JSON response
-      resultBody = await response.text();
+      responseBody = await apiResponse.json();
+    } catch (parseError) {
+      // Handle non-JSON responses
+      responseBody = await apiResponse.text();
     }
 
-    if (!response.ok) {
-      console.error('OneSignal API error:', resultBody);
-      return { ok: false, status: response.status, body: resultBody };
+    if (!apiResponse.ok) {
+      console.error('OneSignal API error:', responseBody);
+      return { ok: false, status: apiResponse.status, body: responseBody };
     }
 
-    console.log(`✅ OneSignal notification API accepted. Recipients: ${resultBody.recipients || 0}`);
-    return { ok: true, status: response.status, body: resultBody };
+    console.log(`✅ OneSignal notification API accepted. Recipients: ${responseBody.recipients || 0}`);
+    return { ok: true, status: apiResponse.status, body: responseBody };
 
   } catch (error: any) {
     console.error('OneSignal push notification error:', error?.message ?? error);
@@ -277,94 +346,122 @@ async function sendOneSignalPushNotification(
 
 
 
-function jsonResponse(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
+/**
+ * Create a JSON response with proper headers
+ * @param responseData - Data to be JSON stringified
+ * @param httpStatus - HTTP status code (default: 200)
+ * @returns Response object with JSON content type
+ */
+function createJsonResponse(responseData: any, httpStatus = 200): Response {
+  return new Response(JSON.stringify(responseData), {
+    status: httpStatus,
     headers: {
       "Content-Type": "application/json"
     }
   });
 }
 
-// CORS headers for all responses
-function withCors(response: Response) {
+/**
+ * Add CORS headers to a response for cross-origin requests
+ * @param response - Original response object
+ * @returns Response with CORS headers added
+ */
+function addCorsHeaders(response: Response): Response {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
   };
-  for (const [key, value] of Object.entries(corsHeaders)) {
-    response.headers.set(key, value);
+  for (const [headerName, headerValue] of Object.entries(corsHeaders)) {
+    response.headers.set(headerName, headerValue);
   }
   return response;
 }
 
 
+/**
+ * Find business by webhook secret for secure webhook authentication
+ * @param webhookSecret - Secret token from webhook URL
+ * @returns Business object or null if not found
+ */
 async function findBusinessByWebhookSecret(webhookSecret: string) {
   if (!webhookSecret || !webhookSecret.startsWith('bus_')) {
     return null;
   }
-  const { data: business, error } = await supabase
+
+  const { data: businessData, error } = await supabaseClient
     .from("businesses")
     .select("id, name, webhook_secret")
     .eq("webhook_secret", webhookSecret)
     .single();
 
-  if (error || !business) {
+  if (error || !businessData) {
     console.error("Business not found for webhook secret:", webhookSecret);
     return null;
   }
-  return business;
+  return businessData;
 }
 
-function mapAppointmentData(payload: any, businessId: string) {
-  const appointment = payload.appointment ?? payload;
-  const customer = appointment.customer_information ?? {};
-  const notes = [];
+/**
+ * Map webhook payload data to appointment database schema
+ * @param webhookPayload - Raw webhook payload from SSA
+ * @param businessId - ID of the business this appointment belongs to
+ * @returns Mapped appointment data ready for database insertion
+ */
+function mapAppointmentData(webhookPayload: any, businessId: string) {
+  const appointmentInfo = webhookPayload.appointment ?? webhookPayload;
+  const customerInfo = appointmentInfo.customer_information ?? {};
+  const additionalNotes = [];
 
-  if (payload.signature?.site_name) notes.push(`Source: ${payload.signature.site_name}`);
-  if (appointment.payment_method) notes.push(`Payment: ${appointment.payment_method}`);
-  if (appointment.public_edit_url) notes.push(`Edit URL: ${appointment.public_edit_url}`);
-  if (payload.team_members?.length) {
-    const team = payload.team_members.map((m) => m.display_name ?? m.name).join(", ");
-    notes.push(`Team: ${team}`);
+  // Collect additional context notes
+  if (webhookPayload.signature?.site_name) additionalNotes.push(`Source: ${webhookPayload.signature.site_name}`);
+  if (appointmentInfo.payment_method) additionalNotes.push(`Payment: ${appointmentInfo.payment_method}`);
+  if (appointmentInfo.public_edit_url) additionalNotes.push(`Edit URL: ${appointmentInfo.public_edit_url}`);
+  if (webhookPayload.team_members?.length) {
+    const teamNames = webhookPayload.team_members.map((member) => member.display_name ?? member.name).join(", ");
+    additionalNotes.push(`Team: ${teamNames}`);
   }
 
-  // Prioritize customer_information.Note over other note fields
-  let customerNotes = null;
-  if (appointment.customer_information?.Note) {
-    customerNotes = appointment.customer_information.Note;
-  } else if (customer["Help Us Be Prepared To Serve You Better, Fast!"]) {
-    customerNotes = customer["Help Us Be Prepared To Serve You Better, Fast!"];
-  } else if (notes.length) {
-    customerNotes = notes.join(" | ");
+  // Prioritize customer notes from different possible fields
+  let finalCustomerNotes = null;
+  if (appointmentInfo.customer_information?.Note) {
+    finalCustomerNotes = appointmentInfo.customer_information.Note;
+  } else if (customerInfo["Help Us Be Prepared To Serve You Better, Fast!"]) {
+    finalCustomerNotes = customerInfo["Help Us Be Prepared To Serve You Better, Fast!"];
+  } else if (additionalNotes.length) {
+    finalCustomerNotes = additionalNotes.join(" | ");
   }
 
-  const appointmentData = {
-    external_id: appointment.id?.toString(),
+  // Map to database schema
+  const mappedAppointmentData = {
+    external_id: appointmentInfo.id?.toString(),
     business_id: businessId,
-    status: appointment.status?.toUpperCase() ?? "BOOKED",
-    customer_name: customer.Name ?? "Unknown",
-    customer_email: customer.Email ?? null,
-    customer_phone: customer.Phone ?? null,
-    vehicle_make_model: customer["Vehicle Make & Model"] ?? null,
-    start_time: appointment.start_date,
-    end_time: appointment.end_date,
-    service_name: appointment.appointment_type_title ?? "Schedule Your Quick Auto Service Today!",
-    location: customer.Location ?? appointment.location ?? "TBD",
-    customer_notes: customerNotes,
-    web_meeting_url: appointment.web_meeting_url ?? null,
-    raw_payload: payload,
+    status: appointmentInfo.status?.toUpperCase() ?? "BOOKED",
+    customer_name: customerInfo.Name ?? "Unknown",
+    customer_email: customerInfo.Email ?? null,
+    customer_phone: customerInfo.Phone ?? null,
+    vehicle_make_model: customerInfo["Vehicle Make & Model"] ?? null,
+    start_time: appointmentInfo.start_date,
+    end_time: appointmentInfo.end_date,
+    service_name: appointmentInfo.appointment_type_title ?? "Schedule Your Quick Auto Service Today!",
+    location: customerInfo.Location ?? appointmentInfo.location ?? "TBD",
+    customer_notes: finalCustomerNotes,
+    web_meeting_url: appointmentInfo.web_meeting_url ?? null,
+    raw_payload: webhookPayload,
     source: `webhook`,
     updated_at: new Date().toISOString()
   };
 
-  return appointmentData;
+  return mappedAppointmentData;
 }
 
-// Map sources to match React component pattern
-function mapSourceToCompatibleValue(source: string) {
-  const sourceMapping: Record<string, string> = {
+/**
+ * Map source values to match React component expectations
+ * @param sourceValue - Raw source string from webhook or user action
+ * @returns Normalized source value
+ */
+function mapSourceToCompatibleValue(sourceValue: string): string {
+  const sourceValueMapping: Record<string, string> = {
     'webhook': 'webhook',
     'customer': 'customer',
     'webhook_booked': 'webhook',
@@ -374,58 +471,78 @@ function mapSourceToCompatibleValue(source: string) {
     'customer_edited': 'customer',
     'user': 'user'
   };
-  return sourceMapping[source] || 'webhook';
+  return sourceValueMapping[sourceValue] || 'webhook';
 }
 
-async function createHistoryRecord(appointmentExternalId: string, action: string, previousData: any, newData: any, source = "webhook") {
-  // Map action to match schema constraints exactly - only use allowed values
-  const actionMapping: Record<string, string> = {
-    "edited": "EDIT",
-    "canceled": "CANCEL",
-    "cancelled": "CANCELLED",
-    "rescheduled": "RESCHEDULE",
-    "booked": "BOOKED",
-    "create": "CREATE",
-    "update": "UPDATE",
-    // Additional mappings to prevent fallback toUpperCase issues
-    "cancel": "CANCEL",
-    "reschedule": "RESCHEDULE",
-    "cancelled": "CANCELLED",
-    "rescheduled": "RESCHEDULE"
+/**
+ * Create a history record for appointment changes
+ * @param appointmentExternalId - External ID of the appointment
+ * @param actionType - Type of action performed
+ * @param previousAppointmentData - Previous appointment state (null for new appointments)
+ * @param newAppointmentData - New appointment state
+ * @param changeSource - Source of the change (webhook, customer, user)
+ */
+async function createHistoryRecord(
+  appointmentExternalId: string,
+  actionType: string,
+  previousAppointmentData: any,
+  newAppointmentData: any,
+  changeSource = "webhook"
+) {
+  // Map action to match database schema constraints
+  const actionTypeMapping: Record<string, string> = {
+    "edited": HISTORY_ACTIONS.EDIT,
+    "canceled": HISTORY_ACTIONS.CANCEL,
+    "cancelled": HISTORY_ACTIONS.CANCELLED,
+    "rescheduled": HISTORY_ACTIONS.RESCHEDULE,
+    "booked": HISTORY_ACTIONS.BOOKED,
+    "create": HISTORY_ACTIONS.CREATE,
+    "update": HISTORY_ACTIONS.UPDATE,
+    // Additional mappings to prevent fallback issues
+    "cancel": HISTORY_ACTIONS.CANCEL,
+    "reschedule": HISTORY_ACTIONS.RESCHEDULE,
+    "cancelled": HISTORY_ACTIONS.CANCELLED,
+    "rescheduled": HISTORY_ACTIONS.RESCHEDULE
   };
 
-  const standardizedAction = actionMapping[action.toLowerCase()] || "UPDATE"; // Default to UPDATE if unknown
+  const standardizedAction = actionTypeMapping[actionType.toLowerCase()] || HISTORY_ACTIONS.UPDATE;
 
   // Map source values to be consistent with React component
-  const compatibleSource = mapSourceToCompatibleValue(source);
+  const normalizedSource = mapSourceToCompatibleValue(changeSource);
 
-  const historyData = {
+  const historyRecordData = {
     appointment_external_id: appointmentExternalId,
     action: standardizedAction,
-    previous_data: previousData,
-    new_data: newData,
-    source: compatibleSource,
+    previous_data: previousAppointmentData,
+    new_data: newAppointmentData,
+    source: normalizedSource,
     changed_by: null,
-    change_reason: `Webhook ${action}`,
+    change_reason: `Webhook ${actionType}`,
     created_at: new Date().toISOString(),
-    notes: `Automated ${action} via SSA webhook`
+    notes: `Automated ${actionType} via SSA webhook`
   };
 
-  const { error } = await supabase.from("appointment_history").insert([historyData]);
+  const { error } = await supabaseClient.from("appointment_history").insert([historyRecordData]);
   if (error) {
     console.error("Failed to create history record:", error);
   } else {
-    console.log(`History record created for ${appointmentExternalId}: ${standardizedAction} from ${compatibleSource}`);
+    console.log(`History record created for ${appointmentExternalId}: ${standardizedAction} from ${normalizedSource}`);
   }
 }
 
-// Detect if edit was made by customer vs admin
-function detectEditSource(payload: any, existingAppointment: any) {
-  const appointment = payload.appointment ?? payload;
-  // Check if this is a customer edit via public edit URL
-  const hasPublicEditUrl = appointment.public_edit_url;
-  const isAdminToken = payload.signature?.token?.includes('admin');
-  const hasTeamMembers = payload.team_members?.length > 0;
+/**
+ * Detect whether an appointment edit was made by a customer or admin/staff
+ * @param webhookPayload - The webhook payload containing appointment data
+ * @param existingAppointmentData - Current appointment data from database
+ * @returns 'customer' if customer edit, 'webhook' if admin/staff edit
+ */
+function detectEditSource(webhookPayload: any, existingAppointmentData: any): string {
+  const appointmentDetails = webhookPayload.appointment ?? webhookPayload;
+
+  // Check indicators of customer vs admin edit
+  const hasPublicEditUrl = appointmentDetails.public_edit_url;
+  const isAdminToken = webhookPayload.signature?.token?.includes('admin');
+  const hasTeamMembers = webhookPayload.team_members?.length > 0;
 
   // If it has a public edit URL and no admin/team involvement, it's likely a customer edit
   if (hasPublicEditUrl && !isAdminToken && !hasTeamMembers) {
@@ -433,14 +550,14 @@ function detectEditSource(payload: any, existingAppointment: any) {
   }
 
   // Check if specific customer-editable fields were changed
-  if (existingAppointment && appointment.customer_information) {
+  if (existingAppointmentData && appointmentDetails.customer_information) {
     const customerEditableFields = ['Name', 'Email', 'Phone', 'Vehicle Make & Model', 'Note'];
-    const changedFields = customerEditableFields.filter((field) => {
-      const existingValue = existingAppointment[field.toLowerCase().replace(' ', '_').replace(' & ', '_')];
-      const newValue = appointment.customer_information[field];
-      return existingValue !== newValue;
+    const modifiedFields = customerEditableFields.filter((field) => {
+      const currentValue = existingAppointmentData[field.toLowerCase().replace(' ', '_').replace(' & ', '_')];
+      const newValue = appointmentDetails.customer_information[field];
+      return currentValue !== newValue;
     });
-    if (changedFields.length > 0 && !hasTeamMembers) {
+    if (modifiedFields.length > 0 && !hasTeamMembers) {
       return "customer";
     }
   }
@@ -448,26 +565,39 @@ function detectEditSource(payload: any, existingAppointment: any) {
   return "webhook"; // Default to webhook for admin/team edits
 }
 
+/**
+ * Compare old and new appointment data to identify changed fields
+ * @param previousData - Previous appointment data
+ * @param currentData - New appointment data
+ * @returns Array of field names that changed
+ */
+function getChangedFields(previousData: any, currentData: any): string[] {
+  const trackedFields = ['customer_name', 'customer_email', 'customer_phone', 'service_name', 'location', 'start_time', 'end_time'];
+  const changedFieldNames = [];
 
-
-// Helper function to detect changed fields
-function getChangedFields(oldData: any, newData: any) {
-  const fields = ['customer_name', 'customer_email', 'customer_phone', 'service_name', 'location', 'start_time', 'end_time'];
-  const changed = [];
-  fields.forEach((field) => {
-    if (oldData[field] !== newData[field]) {
-      changed.push(field.replace('_', ' '));
+  trackedFields.forEach((fieldName) => {
+    if (previousData[fieldName] !== currentData[fieldName]) {
+      changedFieldNames.push(fieldName.replace('_', ' '));
     }
   });
-  return changed;
+
+  return changedFieldNames;
 }
 
-// Notification Service - Dual Delivery (Push + Email)
+/**
+ * Service for sending dual notifications (push + email) to business members
+ */
 class NotificationService {
-  async sendAppointmentNotification(businessId: string, notificationData: any, appointment: any) {
+  /**
+   * Send appointment notifications to all active business members
+   * @param businessId - ID of the business
+   * @param notificationPayload - Notification content and metadata
+   * @param appointmentData - Appointment details for email templates
+   */
+  async sendAppointmentNotification(businessId: string, notificationPayload: any, appointmentData: any) {
     try {
-      // Get all users for this business
-      const { data: businessMembers, error: membersError } = await supabase
+      // Get all active users for this business
+      const { data: businessMembersData, error: membersError } = await supabaseClient
         .from("business_members")
         .select("user_id")
         .eq("business_id", businessId)
@@ -478,142 +608,151 @@ class NotificationService {
         return;
       }
 
-      if (!businessMembers?.length) {
+      if (!businessMembersData?.length) {
         console.log(`No active business members found for business: ${businessId}`);
         return;
       }
 
-      const userIds = businessMembers.map((member) => member.user_id);
+      const memberUserIds = businessMembersData.map((member) => member.user_id);
 
       // Get user profiles with email addresses
-      const { data: userProfiles, error: profilesError } = await supabase
+      const { data: userProfilesData, error: profilesError } = await supabaseClient
         .from("profiles")
         .select("id, email")
-        .in("id", userIds);
+        .in("id", memberUserIds);
 
       if (profilesError) {
         console.error("Error fetching user profiles:", profilesError);
       }
 
       // Create user map for easy lookup
-      const userMap = new Map();
-      userProfiles?.forEach(profile => {
-        userMap.set(profile.id, { email: profile.email });
+      const userProfileMap = new Map();
+      userProfilesData?.forEach(profile => {
+        userProfileMap.set(profile.id, { email: profile.email });
       });
 
       // Get active push subscriptions for these users
-      const { data: subscriptions, error: subsError } = await supabase
+      const { data: activeSubscriptions, error: subscriptionsError } = await supabaseClient
         .from("push_subscriptions")
         .select("*")
-        .in("user_id", userIds)
+        .in("user_id", memberUserIds)
         .eq("push_active", true);
 
-      if (subsError) {
-        console.error("Error fetching push subscriptions:", subsError);
+      if (subscriptionsError) {
+        console.error("Error fetching push subscriptions:", subscriptionsError);
       }
 
-      console.log(`📱 Found ${subscriptions?.length || 0} push subscriptions for ${userIds.length} users`);
+      console.log(`📱 Found ${activeSubscriptions?.length || 0} push subscriptions for ${memberUserIds.length} users`);
       console.log(`📧 Email service configured: ${emailService.isConfigured()}`);
 
       // Send dual notifications (push first, email fallback)
-      const results = await this.sendDualNotifications(
-        userIds,
-        userMap,
-        subscriptions || [],
-        notificationData,
-        appointment
+      const notificationResults = await this.sendDualNotifications(
+        memberUserIds,
+        userProfileMap,
+        activeSubscriptions || [],
+        notificationPayload,
+        appointmentData
       );
 
-      // Log notification delivery
-      await this.logDualNotifications(userIds, businessId, notificationData, results);
+      // Log notification delivery results
+      await this.logDualNotifications(memberUserIds, businessId, notificationPayload, notificationResults);
 
-      const pushSuccessful = results.filter((result) => result.pushSuccess).length;
-      const emailSuccessful = results.filter((result) => result.emailSuccess).length;
+      const successfulPushCount = notificationResults.filter((result) => result.pushSuccess).length;
+      const successfulEmailCount = notificationResults.filter((result) => result.emailSuccess).length;
 
-      console.log(`✅ Dual notifications sent: ${pushSuccessful} push, ${emailSuccessful} email`);
+      console.log(`✅ Dual notifications sent: ${successfulPushCount} push, ${successfulEmailCount} email`);
 
     } catch (error) {
       console.error("Notification service error:", error);
     }
   }
 
+  /**
+   * Send both push and email notifications to each user
+   * @param memberUserIds - Array of user IDs to notify
+   * @param userProfileMap - Map of user profiles with email addresses
+   * @param activeSubscriptions - Array of active push subscriptions
+   * @param notificationPayload - Notification content
+   * @param appointmentData - Appointment details for email
+   * @returns Array of notification results per user
+   */
   async sendDualNotifications(
-    userIds: string[],
-    userMap: Map<string, any>,
-    subscriptions: any[],
-    notificationData: any,
-    appointment: any
+    memberUserIds: string[],
+    userProfileMap: Map<string, any>,
+    activeSubscriptions: any[],
+    notificationPayload: any,
+    appointmentData: any
   ) {
-    const results = [];
+    const notificationResults = [];
 
-    for (const userId of userIds) {
-      const userProfile = userMap.get(userId);
-      const userSubscriptions = subscriptions.filter(sub => sub.user_id === userId);
+    for (const userId of memberUserIds) {
+      const userProfile = userProfileMap.get(userId);
+      const userPushSubscriptions = activeSubscriptions.filter(sub => sub.user_id === userId);
 
-      let pushSuccess = false;
-      let emailSuccess = false;
-      let providerResponse: any = null;
-      let subscriptionIdForLog: string | null = null;
-      let pushError: string | null = null;
+      let pushNotificationSuccess = false;
+      let emailNotificationSuccess = false;
+      let pushProviderResponse: any = null;
+      let subscriptionIdForLogging: string | null = null;
+      let pushNotificationError: string | null = null;
 
       // 1. Try push notification first (immediate delivery)
-      if (userSubscriptions.length > 0) {
-        console.log(`📱 Sending push notification to user ${userId} (${userSubscriptions.length} subscriptions)`);
-        const pushResults = await Promise.allSettled(
-          userSubscriptions.map((sub) => this.sendPushNotification(sub, notificationData))
+      if (userPushSubscriptions.length > 0) {
+        console.log(`📱 Sending push notification to user ${userId} (${userPushSubscriptions.length} subscriptions)`);
+        const pushNotificationResults = await Promise.allSettled(
+          userPushSubscriptions.map((subscription) => this.sendPushNotification(subscription, notificationPayload))
         );
-        
+
         // Check push results and capture provider response
-        for (const result of pushResults) {
+        for (const result of pushNotificationResults) {
           if (result.status === 'fulfilled') {
-            if (result.value && result.value.subscriptionId) subscriptionIdForLog = result.value.subscriptionId;
+            if (result.value && result.value.subscriptionId) subscriptionIdForLogging = result.value.subscriptionId;
           }
 
           if (result.status === 'fulfilled' && result.value.success) {
-            pushSuccess = true;
-            providerResponse = result.value.providerResponse;
-            if (result.value.subscriptionId) subscriptionIdForLog = result.value.subscriptionId;
+            pushNotificationSuccess = true;
+            pushProviderResponse = result.value.providerResponse;
+            if (result.value.subscriptionId) subscriptionIdForLogging = result.value.subscriptionId;
             break;
           } else if (result.status === 'fulfilled' && result.value && result.value.providerResponse) {
             // Capture provider response even if failed
-            providerResponse = result.value.providerResponse;
-            pushError = result.value.error || 'Push notification failed';
+            pushProviderResponse = result.value.providerResponse;
+            pushNotificationError = result.value.error || 'Push notification failed';
           }
         }
       }
 
       // 2. Send email notification (reliable fallback)
-      let emailError: string | null = null;
+      let emailNotificationError: string | null = null;
       if (userProfile?.email && emailService.isConfigured()) {
         console.log(`📧 Sending email notification to ${userProfile.email}`);
-        const action = this.getActionFromNotificationType(notificationData.type);
-        const { html, text } = emailService.generateAppointmentEmailHtml(appointment, action);
-        const subject = this.getEmailSubject(notificationData.type, appointment);
+        const appointmentAction = this.getActionFromNotificationType(notificationPayload.type);
+        const { html: emailHtml, text: emailText } = emailService.generateAppointmentEmailHtml(appointmentData, appointmentAction);
+        const emailSubjectLine = this.getEmailSubject(notificationPayload.type, appointmentData);
 
-        emailSuccess = await emailService.sendAppointmentEmail(
+        emailNotificationSuccess = await emailService.sendAppointmentEmail(
           userProfile.email,
-          subject,
-          html,
-          text
+          emailSubjectLine,
+          emailHtml,
+          emailText
         );
       } else if (!userProfile?.email) {
         console.log(`⚠️ No email address found for user ${userId}`);
-        emailError = 'No email address configured';
+        emailNotificationError = 'No email address configured';
       }
 
-      results.push({
+      notificationResults.push({
         userId,
-        pushSuccess,
-        emailSuccess,
-        pushSubscriptions: userSubscriptions.length,
+        pushSuccess: pushNotificationSuccess,
+        emailSuccess: emailNotificationSuccess,
+        pushSubscriptions: userPushSubscriptions.length,
         hasEmail: !!userProfile?.email,
-        providerResponse: providerResponse,
-        subscriptionId: subscriptionIdForLog,
-        error: pushError || emailError || (pushSuccess || emailSuccess ? null : 'No notification sent')
+        providerResponse: pushProviderResponse,
+        subscriptionId: subscriptionIdForLogging,
+        error: pushNotificationError || emailNotificationError || (pushNotificationSuccess || emailNotificationSuccess ? null : 'No notification sent')
       });
     }
 
-    return results;
+    return notificationResults;
   }
 
   getActionFromNotificationType(type: string): string {
@@ -754,38 +893,50 @@ class NotificationService {
 
 const notificationService = new NotificationService();
 
-// Notification Triggers
-async function triggerAppointmentNotification(action: string, appointment: any, businessId: string, changes: string[]) {
-  const notificationMap: Record<string, any> = {
+/**
+ * Trigger appointment notifications based on action type
+ * @param actionType - Type of appointment action (booked, edited, cancelled, rescheduled)
+ * @param appointmentData - Appointment details
+ * @param businessId - ID of the business
+ * @param changedFields - Array of fields that were modified (for edit notifications)
+ */
+async function triggerAppointmentNotification(
+  actionType: string,
+  appointmentData: any,
+  businessId: string,
+  changedFields: string[]
+) {
+  // Map action types to notification templates
+  const notificationTemplates: Record<string, any> = {
     booked: {
       title: "📅 New Appointment Booked",
-      body: `${appointment.customer_name} - ${appointment.service_name}`,
-      type: "appointment_booked"
+      body: `${appointmentData.customer_name} - ${appointmentData.service_name}`,
+      type: NOTIFICATION_TYPES.APPOINTMENT_BOOKED
     },
     edited: {
       title: "✏️ Appointment Updated",
-      body: `${appointment.customer_name} - ${changes?.join(', ') || 'Details modified'}`,
-      type: "appointment_edited"
+      body: `${appointmentData.customer_name} - ${changedFields?.join(', ') || 'Details modified'}`,
+      type: NOTIFICATION_TYPES.APPOINTMENT_EDITED
     },
     canceled: {
       title: "❌ Appointment Cancelled",
-      body: `${appointment.customer_name} - ${appointment.service_name}`,
-      type: "appointment_cancelled"
+      body: `${appointmentData.customer_name} - ${appointmentData.service_name}`,
+      type: NOTIFICATION_TYPES.APPOINTMENT_CANCELLED
     },
     rescheduled: {
       title: "🔄 Appointment Rescheduled",
-      body: `${appointment.customer_name} - ${appointment.service_name}`,
-      type: "appointment_edited"
+      body: `${appointmentData.customer_name} - ${appointmentData.service_name}`,
+      type: NOTIFICATION_TYPES.APPOINTMENT_EDITED
     }
   };
 
-  const notificationData = notificationMap[action];
-  if (notificationData) {
-    notificationData.url = `/appointments/${appointment.external_id}`;
-    notificationData.appointmentId = appointment.external_id;
-    notificationData.customerPhone = appointment.customer_phone; // Add customer phone for call action
-    console.log(`Triggering ${action} notification for business: ${businessId}`);
-    await notificationService.sendAppointmentNotification(businessId, notificationData, appointment);
+  const notificationTemplate = notificationTemplates[actionType];
+  if (notificationTemplate) {
+    notificationTemplate.url = `/appointments/${appointmentData.external_id}`;
+    notificationTemplate.appointmentId = appointmentData.external_id;
+    notificationTemplate.customerPhone = appointmentData.customer_phone; // Add customer phone for call action
+    console.log(`Triggering ${actionType} notification for business: ${businessId}`);
+    await notificationService.sendAppointmentNotification(businessId, notificationTemplate, appointmentData);
   }
 }
 
@@ -934,107 +1085,113 @@ async function handleAppointmentUpdate(req: Request, externalId: string) {
   }
 }
 
-// Main webhook handler
-async function handleWebhook(payload: any, businessId: string) {
-  const action = payload.action_verb;
-  let normalizedAction = action === "cancelled" ? "canceled" : action;
+/**
+ * Main webhook handler for processing SSA appointment webhooks
+ * @param webhookPayload - Raw webhook payload from SSA
+ * @param businessId - ID of the business this webhook is for
+ * @returns JSON response with processing results
+ */
+async function handleWebhook(webhookPayload: any, businessId: string) {
+  const actionVerb = webhookPayload.action_verb;
+  let normalizedActionType = actionVerb === "cancelled" ? APPOINTMENT_ACTIONS.CANCELLED : actionVerb;
 
-  if (!["booked", "canceled", "edited", "rescheduled"].includes(normalizedAction)) {
-    return jsonResponse({ error: `Unsupported action: ${action}` }, 400);
+  // Validate supported action types
+  if (!Object.values(APPOINTMENT_ACTIONS).includes(normalizedActionType)) {
+    return createJsonResponse({ error: `Unsupported action: ${actionVerb}` }, 400);
   }
 
   try {
-    let appointmentData = mapAppointmentData(payload, businessId);
-    const externalId = appointmentData.external_id;
+    let mappedAppointmentData = mapAppointmentData(webhookPayload, businessId);
+    const appointmentExternalId = mappedAppointmentData.external_id;
 
-    if (!externalId) {
+    if (!appointmentExternalId) {
       throw new Error("Missing appointment external_id");
     }
 
-    // Get current state for history
-    const { data: existingAppointment } = await supabase
+    // Get current appointment state for history tracking
+    const { data: existingAppointmentData } = await supabaseClient
       .from("appointments")
       .select("*")
-      .eq("external_id", externalId)
+      .eq("external_id", appointmentExternalId)
       .eq("business_id", businessId)
       .maybeSingle();
 
     // Detect edit source for proper history tracking
-    let editSource = "webhook";
-    if (normalizedAction === "edited" && existingAppointment) {
-      editSource = detectEditSource(payload, existingAppointment);
+    let changeSource = "webhook";
+    if (normalizedActionType === APPOINTMENT_ACTIONS.EDITED && existingAppointmentData) {
+      changeSource = detectEditSource(webhookPayload, existingAppointmentData);
     }
 
-    // Handle different actions with proper source tracking
-    if (normalizedAction === "canceled") {
-      appointmentData.status = "CANCELLED";
-      appointmentData.source = `webhook_canceled`;
-    } else if (normalizedAction === "edited") {
-      appointmentData.source = `webhook_edited`;
-      if (editSource === "customer") {
-        appointmentData.source = `customer_edited`;
+    // Handle different action types with proper source tracking
+    if (normalizedActionType === APPOINTMENT_ACTIONS.CANCELLED) {
+      mappedAppointmentData.status = "CANCELLED";
+      mappedAppointmentData.source = `webhook_canceled`;
+    } else if (normalizedActionType === APPOINTMENT_ACTIONS.EDITED) {
+      mappedAppointmentData.source = `webhook_edited`;
+      if (changeSource === "customer") {
+        mappedAppointmentData.source = `customer_edited`;
       }
-    } else if (normalizedAction === "booked") {
-      appointmentData.source = `webhook_booked`;
-      // For new bookings, check if this might be a reschedule
-      if (!existingAppointment) {
-        const { data: recentCancelled } = await supabase
+    } else if (normalizedActionType === APPOINTMENT_ACTIONS.BOOKED) {
+      mappedAppointmentData.source = `webhook_booked`;
+      // For new bookings, check if this might be a reschedule from a recent cancellation
+      if (!existingAppointmentData) {
+        const { data: recentCancelledAppointments } = await supabaseClient
           .from("appointments")
           .select("external_id, start_time, service_name")
           .eq("business_id", businessId)
-          .eq("customer_email", appointmentData.customer_email)
+          .eq("customer_email", mappedAppointmentData.customer_email)
           .eq("status", "CANCELLED")
           .order("created_at", { ascending: false })
           .limit(1);
 
-        if (recentCancelled?.[0]) {
-          const oldAppointment = recentCancelled[0];
-          appointmentData.previous_external_id = oldAppointment.external_id;
-          appointmentData.customer_notes = `RESCHEDULED from ${oldAppointment.external_id} | ${appointmentData.customer_notes}`;
-          appointmentData.source = `webhook_rescheduled`;
-          normalizedAction = "rescheduled";
+        if (recentCancelledAppointments?.[0]) {
+          const previousAppointment = recentCancelledAppointments[0];
+          mappedAppointmentData.previous_external_id = previousAppointment.external_id;
+          mappedAppointmentData.customer_notes = `RESCHEDULED from ${previousAppointment.external_id} | ${mappedAppointmentData.customer_notes}`;
+          mappedAppointmentData.source = `webhook_rescheduled`;
+          normalizedActionType = APPOINTMENT_ACTIONS.RESCHEDULED;
         }
       }
-    } else if (normalizedAction === "rescheduled") {
-      appointmentData.source = `webhook_rescheduled`;
+    } else if (normalizedActionType === APPOINTMENT_ACTIONS.RESCHEDULED) {
+      mappedAppointmentData.source = `webhook_rescheduled`;
     }
 
-    // Upsert the appointment
-    const { data: updatedAppointment, error: upsertError } = await supabase
+    // Upsert the appointment (insert or update based on external_id)
+    const { data: updatedAppointmentData, error: upsertError } = await supabaseClient
       .from("appointments")
-      .upsert([appointmentData], { onConflict: "external_id" })
+      .upsert([mappedAppointmentData], { onConflict: "external_id" })
       .select()
       .single();
 
     if (upsertError) throw upsertError;
 
     // Create history record with proper source mapping
-    if (existingAppointment) {
-      await createHistoryRecord(externalId, normalizedAction, existingAppointment, appointmentData, editSource);
-    } else if (normalizedAction === "booked" || normalizedAction === "rescheduled") {
-      await createHistoryRecord(externalId, normalizedAction, null, appointmentData, "webhook");
+    if (existingAppointmentData) {
+      await createHistoryRecord(appointmentExternalId, normalizedActionType, existingAppointmentData, mappedAppointmentData, changeSource);
+    } else if (normalizedActionType === APPOINTMENT_ACTIONS.BOOKED || normalizedActionType === APPOINTMENT_ACTIONS.RESCHEDULED) {
+      await createHistoryRecord(appointmentExternalId, normalizedActionType, null, mappedAppointmentData, "webhook");
     }
 
-    // Trigger notifications
-    const changedFields = existingAppointment ? getChangedFields(existingAppointment, appointmentData) : [];
-    await triggerAppointmentNotification(normalizedAction, updatedAppointment, businessId, changedFields);
+    // Trigger notifications to business members
+    const changedFieldList = existingAppointmentData ? getChangedFields(existingAppointmentData, mappedAppointmentData) : [];
+    await triggerAppointmentNotification(normalizedActionType, updatedAppointmentData, businessId, changedFieldList);
 
-    return jsonResponse({
+    return createJsonResponse({
       success: true,
-      action: normalizedAction,
-      appointment_id: updatedAppointment.external_id,
-      previous_external_id: updatedAppointment.previous_external_id,
-      status: updatedAppointment.status,
+      action: normalizedActionType,
+      appointment_id: updatedAppointmentData.external_id,
+      previous_external_id: updatedAppointmentData.previous_external_id,
+      status: updatedAppointmentData.status,
       business_id: businessId,
-      web_meeting_url: updatedAppointment.web_meeting_url,
-      edit_source: editSource,
-      history_source: mapSourceToCompatibleValue(editSource),
+      web_meeting_url: updatedAppointmentData.web_meeting_url,
+      edit_source: changeSource,
+      history_source: mapSourceToCompatibleValue(changeSource),
       notification_sent: true
     });
 
   } catch (error: any) {
     console.error("Webhook processing error:", error);
-    return jsonResponse({ success: false, error: error.message }, 500);
+    return createJsonResponse({ success: false, error: error.message }, 500);
   }
 }
 
@@ -1082,8 +1239,12 @@ async function handlePushRegister(req: Request) {
   }
 }
 
-serve(async (req) => {
-  const url = new URL(req.url);
+// ========================================
+// MAIN REQUEST HANDLER
+// ========================================
+
+serve(async (request) => {
+  const requestUrl = new URL(request.url);
 
   // CORS headers for all responses
   const corsHeaders = {
@@ -1093,16 +1254,18 @@ serve(async (req) => {
   };
 
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Health check endpoint for diagnostics
-  if (req.method === "GET" && url.pathname.endsWith("/health")) {
+  // ========================================
+  // HEALTH CHECK ENDPOINT
+  // ========================================
+  if (request.method === "GET" && requestUrl.pathname.endsWith("/health")) {
     const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
     const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
-    
-    return jsonResponse({
+
+    return createJsonResponse({
       status: "healthy",
       timestamp: new Date().toISOString(),
       onesignal_configured: !!(oneSignalAppId && oneSignalApiKey),
@@ -1110,123 +1273,135 @@ serve(async (req) => {
     });
   }
 
+  // ========================================
+  // MANUAL APPOINTMENT ENDPOINTS
+  // ========================================
+
   // Manual appointment creation
-  if (req.method === "POST" && url.pathname.endsWith("/appointments")) {
-    const result = await handleManualAppointment(req);
-    return withCors(result);
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/appointments")) {
+    const response = await handleManualAppointment(request);
+    return addCorsHeaders(response);
   }
 
   // Appointment updates
-  if (req.method === "PUT" && url.pathname.includes("/appointments/")) {
-    const externalId = url.pathname.split('/appointments/')[1];
-    const result = await handleAppointmentUpdate(req, externalId);
-    return withCors(result);
+  if (request.method === "PUT" && requestUrl.pathname.includes("/appointments/")) {
+    const appointmentExternalId = requestUrl.pathname.split('/appointments/')[1];
+    const response = await handleAppointmentUpdate(request, appointmentExternalId);
+    return addCorsHeaders(response);
   }
 
+  // ========================================
+  // WEBHOOK ENDPOINTS
+  // ========================================
+
   // Secure webhook endpoint: /ssa-webhook/[webhook_secret]
-  if (req.method === "POST" && url.pathname.includes("/ssa-webhook/")) {
+  if (request.method === "POST" && requestUrl.pathname.includes("/ssa-webhook/")) {
     try {
       // Extract webhook secret from URL path
-      const pathParts = url.pathname.split('/');
-      const webhookSecret = pathParts[pathParts.length - 1];
+      const urlPathParts = requestUrl.pathname.split('/');
+      const webhookSecret = urlPathParts[urlPathParts.length - 1];
 
       if (!webhookSecret) {
-        const response = jsonResponse({ error: "Missing webhook secret in URL" }, 401);
-        return withCors(response);
+        const errorResponse = createJsonResponse({ error: "Missing webhook secret in URL" }, 401);
+        return addCorsHeaders(errorResponse);
       }
 
       // Find business by webhook secret
-      const business = await findBusinessByWebhookSecret(webhookSecret);
-      if (!business) {
-        const response = jsonResponse({ error: "Invalid webhook secret" }, 401);
-        return withCors(response);
+      const businessData = await findBusinessByWebhookSecret(webhookSecret);
+      if (!businessData) {
+        const errorResponse = createJsonResponse({ error: "Invalid webhook secret" }, 401);
+        return addCorsHeaders(errorResponse);
       }
 
-      console.log(`Processing secure webhook for business: ${business.name} (${business.id})`);
-      const payload = await req.json();
-      const result = await handleWebhook(payload, business.id);
-      return withCors(result);
+      console.log(`Processing secure webhook for business: ${businessData.name} (${businessData.id})`);
+      const webhookPayload = await request.json();
+      const response = await handleWebhook(webhookPayload, businessData.id);
+      return addCorsHeaders(response);
 
-    } catch (err: any) {
-      console.error("Secure webhook error:", err);
-      const response = jsonResponse({ error: "Invalid JSON payload" }, 400);
-      return withCors(response);
+    } catch (error: any) {
+      console.error("Secure webhook error:", error);
+      const errorResponse = createJsonResponse({ error: "Invalid JSON payload" }, 400);
+      return addCorsHeaders(errorResponse);
     }
   }
 
   // Legacy webhook endpoint for backward compatibility
-  if (req.method === "POST" && url.pathname.endsWith("/webhook-from-ssa")) {
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/webhook-from-ssa")) {
     try {
-      const payload = await req.json();
+      const webhookPayload = await request.json();
       // Use site_url from SSA payload to identify business
-      const siteUrl = payload.signature?.site_url;
+      const siteUrl = webhookPayload.signature?.site_url;
       if (!siteUrl) {
-        const response = jsonResponse({ error: "Missing site URL in payload" }, 400);
-        return withCors(response);
+        const errorResponse = createJsonResponse({ error: "Missing site URL in payload" }, 400);
+        return addCorsHeaders(errorResponse);
       }
 
       // Find business by website URL
-      const { data: business, error } = await supabase
+      const { data: businessData, error } = await supabaseClient
         .from("businesses")
         .select("id, name, website")
         .eq("website", siteUrl)
         .single();
 
-      if (error || !business) {
-        const response = jsonResponse({ error: "Business not found for this website" }, 404);
-        return withCors(response);
+      if (error || !businessData) {
+        const errorResponse = createJsonResponse({ error: "Business not found for this website" }, 404);
+        return addCorsHeaders(errorResponse);
       }
 
-      console.log(`Processing legacy webhook for business: ${business.name} (${business.id})`);
-      const result = await handleWebhook(payload, business.id);
-      return withCors(result);
+      console.log(`Processing legacy webhook for business: ${businessData.name} (${businessData.id})`);
+      const response = await handleWebhook(webhookPayload, businessData.id);
+      return addCorsHeaders(response);
 
-    } catch (err: any) {
-      console.error("Legacy webhook error:", err);
-      const response = jsonResponse({ error: "Invalid JSON payload" }, 400);
-      return withCors(response);
+    } catch (error: any) {
+      console.error("Legacy webhook error:", error);
+      const errorResponse = createJsonResponse({ error: "Invalid JSON payload" }, 400);
+      return addCorsHeaders(errorResponse);
     }
   }
 
+  // ========================================
+  // TESTING ENDPOINTS
+  // ========================================
+
   // Test notification endpoint for manual testing
-  if (req.method === "POST" && url.pathname.endsWith("/test-notification")) {
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/test-notification")) {
     try {
-      const { userId, businessId } = await req.json();
+      const { userId, businessId } = await request.json();
 
       if (!userId || !businessId) {
-        return jsonResponse({ error: "Missing userId or businessId" }, 400);
+        return createJsonResponse({ error: "Missing userId or businessId" }, 400);
       }
 
       // Get user's push subscriptions
-      const { data: subscriptions, error: subsError } = await supabase
+      const { data: userSubscriptions, error: subscriptionsError } = await supabaseClient
         .from("push_subscriptions")
         .select("*")
         .eq("user_id", userId);
 
-      if (subsError || !subscriptions?.length) {
-        return jsonResponse({ error: "No push subscriptions found for user" }, 404);
+      if (subscriptionsError || !userSubscriptions?.length) {
+        return createJsonResponse({ error: "No push subscriptions found for user" }, 404);
       }
 
-      const testNotificationData = {
+      const testNotificationPayload = {
         title: "🧪 Test Notification",
         body: "This is a test notification from SSA Appointments",
-        type: "test_notification",
+        type: NOTIFICATION_TYPES.TEST_NOTIFICATION,
         url: "/appointments",
         appointmentId: "test"
       };
 
       // Send test notification
-      const results = await Promise.allSettled(
-        subscriptions.map((sub) => notificationService.sendPushNotification(sub, testNotificationData))
+      const notificationResults = await Promise.allSettled(
+        userSubscriptions.map((subscription) => notificationService.sendPushNotification(subscription, testNotificationPayload))
       );
 
-      const successful = results.filter((result) => result.status === 'fulfilled' && result.value.success).length;
+      const successfulNotifications = notificationResults.filter((result) => result.status === 'fulfilled' && result.value.success).length;
 
-      return jsonResponse({
+      return createJsonResponse({
         success: true,
-        message: `Test notification sent to ${successful}/${subscriptions.length} subscriptions`,
-        results: results.map((result, index) => ({
-          subscriptionId: subscriptions[index].id,
+        message: `Test notification sent to ${successfulNotifications}/${userSubscriptions.length} subscriptions`,
+        results: notificationResults.map((result, index) => ({
+          subscriptionId: userSubscriptions[index].id,
           success: result.status === 'fulfilled' && result.value.success,
           error: result.status === 'rejected' ? result.reason : result.value?.error || null
         }))
@@ -1234,22 +1409,22 @@ serve(async (req) => {
 
     } catch (error: any) {
       console.error("Test notification error:", error);
-      return jsonResponse({ error: error.message }, 500);
+      return createJsonResponse({ error: error.message }, 500);
     }
   }
 
   // Test SMTP endpoint for email testing
-  if (req.method === "POST" && url.pathname.endsWith("/test-smtp")) {
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/test-smtp")) {
     try {
-      const { toEmail } = await req.json();
+      const { toEmail } = await request.json();
 
       if (!toEmail) {
-        return jsonResponse({ error: "Missing toEmail parameter" }, 400);
+        return createJsonResponse({ error: "Missing toEmail parameter" }, 400);
       }
 
       console.log(`Testing SMTP with email: ${toEmail}`);
 
-      const testEmailData = {
+      const testEmailPayload = {
         to: toEmail,
         subject: "SMTP Test - SSA Appointments",
         html: `
@@ -1266,19 +1441,62 @@ serve(async (req) => {
         `
       };
 
-      const success = await emailService.sendAppointmentEmail(
+      const emailSent = await emailService.sendAppointmentEmail(
         toEmail,
-        testEmailData.subject,
-        testEmailData.html,
-        testEmailData.text
+        testEmailPayload.subject,
+        testEmailPayload.html,
+        testEmailPayload.text
       );
 
-      if (success) {
-        return jsonResponse({
+      if (emailSent) {
+        return createJsonResponse({
           success: true,
           message: `Test email sent successfully to ${toEmail}`,
           smtp_configured: emailService.isConfigured()
         });
+      } else {
+        return createJsonResponse({
+          success: false,
+          message: `Failed to send test email to ${toEmail}`,
+          smtp_configured: emailService.isConfigured()
+        }, 500);
+      }
+
+    } catch (error: any) {
+      console.error("SMTP test error:", error);
+      return createJsonResponse({
+        success: false,
+        error: error.message,
+        smtp_configured: emailService.isConfigured()
+      }, 500);
+    }
+  }
+
+  // Push registration endpoint for client to (re)register OneSignal ids
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/push-register")) {
+    const response = await handlePushRegister(request);
+    return addCorsHeaders(response);
+  }
+
+  // ========================================
+  // 404 HANDLER
+  // ========================================
+  const notFoundResponse = createJsonResponse({
+    error: "Not found",
+    message: "SSA webhook endpoints only",
+    supported_endpoints: [
+      "GET /health",
+      "POST /test-notification",
+      "POST /test-smtp",
+      "POST /appointments",
+      "PUT /appointments/{external_id}",
+      "POST /ssa-webhook/[webhook_secret] (secure)",
+      "POST /webhook-from-ssa (legacy)",
+      "POST /ssa-appointments (main)"
+    ]
+  }, 404);
+  return addCorsHeaders(notFoundResponse);
+});
       } else {
         return jsonResponse({
           success: false,
@@ -1304,15 +1522,85 @@ serve(async (req) => {
   }
 
   // Main webhook endpoint for direct WordPress SSA calls
-if (req.method === "POST" && url.pathname.endsWith("/ssa-appointments")) {
+  if (request.method === "POST" && requestUrl.pathname.endsWith("/ssa-appointments")) {
     try {
-      const payload = await req.json();
+      const webhookPayload = await request.json();
 
       // Log all request headers for debugging
       console.log("Received webhook headers:");
-      for (const [key, value] of req.headers.entries()) {
-        console.log(`  ${key}: ${value}`);
+      for (const [headerName, headerValue] of request.headers.entries()) {
+        console.log(`  ${headerName}: ${headerValue}`);
       }
+
+      // Check for 'x-business-id' header for business identification
+      const businessIdFromHeader = request.headers.get("x-business-id");
+
+      console.log(`x-business-id header present: ${businessIdFromHeader ? 'Yes (' + businessIdFromHeader + ')' : 'No'}`);
+
+      let businessData;
+
+      if (businessIdFromHeader) {
+        // Verify business exists with this ID
+        const { data, error } = await supabaseClient
+          .from("businesses")
+          .select("id, name, webhook_secret")
+          .eq("id", businessIdFromHeader)
+          .single();
+
+        if (error || !data) {
+          console.error("Business not found for x-business-id header:", businessIdFromHeader);
+          const errorResponse = createJsonResponse({
+            error: "Invalid business ID in header"
+          }, 401);
+          return addCorsHeaders(errorResponse);
+        }
+
+        businessData = data;
+        console.log(`Processing main webhook for business from header: ${businessData.name} (${businessData.id})`);
+      } else {
+        // Extract webhook token from payload if header absent
+        const webhookToken = webhookPayload.signature?.token;
+
+        console.log(`Payload signature.token present: ${webhookToken ? 'Yes (' + webhookToken + ')' : 'No'}`);
+
+        if (!webhookToken) {
+          const errorResponse = createJsonResponse({
+            error: "Missing webhook token in payload and x-business-id header"
+          }, 401);
+          return addCorsHeaders(errorResponse);
+        }
+
+        // Find business by webhook token (matches your WEBHOOK_TOKEN env var)
+        const { data, error } = await supabaseClient
+          .from("businesses")
+          .select("id, name, webhook_secret")
+          .eq("webhook_secret", webhookToken)
+          .single();
+
+        if (error || !data) {
+          console.error("Business not found for webhook token:", webhookToken);
+          const errorResponse = createJsonResponse({
+            error: "Invalid webhook token"
+          }, 401);
+          return addCorsHeaders(errorResponse);
+        }
+
+        businessData = data;
+        console.log(`Processing main webhook for business from token: ${businessData.name} (${businessData.id})`);
+      }
+
+      // Process the webhook with the found business
+      const response = await handleWebhook(webhookPayload, businessData.id);
+      return addCorsHeaders(response);
+
+    } catch (error: any) {
+      console.error("Main webhook error:", error);
+      const errorResponse = createJsonResponse({
+        error: "Invalid JSON payload"
+      }, 400);
+      return addCorsHeaders(errorResponse);
+    }
+  }
 
       // Check for 'x-business-id' header for business identification
       const headerBusinessId = req.headers.get("x-business-id");

@@ -1,19 +1,4 @@
-// ========================================
-// MAIN ENTRY POINT
-// ========================================
 
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createJsonResponse, addCorsHeaders } from "./utils.ts";
-import { NOTIFICATION_TYPES } from "./constants.ts";
-import { EmailService } from "./email-service.ts";
-import { NotificationService } from "./notification-service.ts";
-import {
-  findBusinessByWebhookSecret,
-  handleWebhook,
-  handleManualAppointment,
-  handleAppointmentUpdate,
-  handlePushRegister
-} from "./webhook-handlers.ts";
 
 serve(async (request) => {
   const requestUrl = new URL(request.url);

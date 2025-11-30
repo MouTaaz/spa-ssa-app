@@ -49,12 +49,19 @@ const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesigna
 
 export async function initializeOneSignal(userId?: string) {
   try {
+    console.log('🔍 DEBUG: Initialize OneSignal')
+    console.log('userId:', userId)
+    console.log('isInitialized:', isInitialized)
+    console.log('ONESIGNAL_APP_ID:', ONESIGNAL_APP_ID)
+
     // Check if already initialized
     if (isInitialized) {
       // If userId provided and different from current, update it
       if (userId) {
         const oneSignal = await loadOneSignal()
+        console.log('🔍 DEBUG: Logging in user to OneSignal')
         await oneSignal.login(userId)
+        console.log('🔍 DEBUG: User logged in to OneSignal successfully')
       }
       return true
     }
@@ -70,6 +77,7 @@ export async function initializeOneSignal(userId?: string) {
     }
     const oneSignal = await loadOneSignal()
 
+    console.log('🔍 DEBUG: Initializing OneSignal with config')
     // Initialize OneSignal
     await oneSignal.init({
       appId: ONESIGNAL_APP_ID,
@@ -80,6 +88,7 @@ export async function initializeOneSignal(userId?: string) {
 
     // Set external user ID if user is logged in
     if (userId) {
+      console.log('🔍 DEBUG: Setting external user ID')
       await oneSignal.login(userId)
     }
 
@@ -141,10 +150,15 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
 
 export async function saveOneSignalSubscription(userId: string): Promise<boolean> {
   try {
+    console.log('🔍 DEBUG: Save OneSignal Subscription')
+    console.log('userId:', userId)
+
     const oneSignal = await loadOneSignal()
 
     // Get OneSignal Player ID with retry logic
     let playerId = await oneSignal.User.PushSubscription.id
+    console.log('🔍 DEBUG: Initial Player ID:', playerId)
+
     let attempts = 0
     const maxAttempts = 5
 
@@ -153,6 +167,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
       console.log(`Waiting for OneSignal Player ID... (attempt ${attempts + 1}/${maxAttempts})`)
       await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
       playerId = await oneSignal.User.PushSubscription.id
+      console.log('🔍 DEBUG: Player ID after retry:', playerId)
       attempts++
     }
 
@@ -161,19 +176,27 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
       return false
     }
 
+    const subscriptionData = {
+      user_id: userId,
+      onesignal_player_id: playerId,
+      onesignal_external_user_id: userId,
+      platform: getPlatform(),
+      user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
+    }
+
+    console.log('🔍 DEBUG: Subscription data to save:', JSON.stringify(subscriptionData, null, 2))
+
     // Save to database
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('push_subscriptions')
-      .upsert({
-        user_id: userId,
-        onesignal_player_id: playerId,
-        onesignal_external_user_id: userId,
-        platform: getPlatform(),
-        user_agent: navigator.userAgent,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'onesignal_player_id'
+      .upsert(subscriptionData, {
+        onConflict: 'user_id'
       })
+
+    console.log('🔍 DEBUG: Database upsert result')
+    console.log('error:', error)
+    console.log('data:', data)
 
     if (error) {
       console.error("Failed to save OneSignal subscription:", error)

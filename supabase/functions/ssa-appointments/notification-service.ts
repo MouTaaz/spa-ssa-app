@@ -48,6 +48,12 @@ export async function sendOneSignalPushNotification(
       ? { ...basePayload, include_player_ids: targetIds }
       : { ...basePayload, include_external_user_ids: targetIds };
 
+    console.log("🔍 DEBUG: OneSignal API Call");
+    console.log("URL: https://onesignal.com/api/v1/notifications");
+    console.log("Method: POST");
+    console.log("Authorization: Basic", oneSignalApiKey ? "***SET***" : "***NOT SET***");
+    console.log("Payload:", JSON.stringify(finalPayload, null, 2));
+
     // Send notification to OneSignal API
     const apiResponse = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
@@ -65,6 +71,11 @@ export async function sendOneSignalPushNotification(
       // Handle non-JSON responses
       responseBody = await apiResponse.text();
     }
+
+    console.log("🔍 DEBUG: OneSignal API Response");
+    console.log("Status:", apiResponse.status);
+    console.log("OK:", apiResponse.ok);
+    console.log("Response Body:", JSON.stringify(responseBody, null, 2));
 
     if (!apiResponse.ok) {
       console.error('OneSignal API error:', responseBody);
@@ -98,12 +109,21 @@ export class NotificationService {
    */
   async sendAppointmentNotification(businessId: string, notificationPayload: NotificationPayload, appointmentData: AppointmentData) {
     try {
+      console.log("🔍 DEBUG: Send Appointment Notification");
+      console.log("businessId:", businessId);
+      console.log("notificationPayload:", JSON.stringify(notificationPayload, null, 2));
+      console.log("appointmentData:", JSON.stringify(appointmentData, null, 2));
+
       // Get all active users for this business
       const { data: businessMembersData, error: membersError } = await supabaseClient
         .from("business_members")
         .select("user_id")
         .eq("business_id", businessId)
         .eq("status", "active");
+
+      console.log("🔍 DEBUG: Business Members Query");
+      console.log("membersError:", membersError);
+      console.log("businessMembersData:", JSON.stringify(businessMembersData, null, 2));
 
       if (membersError) {
         console.error("Error fetching business members:", membersError);
@@ -116,12 +136,18 @@ export class NotificationService {
       }
 
       const memberUserIds = businessMembersData.map((member) => member.user_id);
+      console.log("🔍 DEBUG: Member User IDs");
+      console.log("memberUserIds:", memberUserIds);
 
       // Get user profiles with email addresses
       const { data: userProfilesData, error: profilesError } = await supabaseClient
         .from("profiles")
         .select("id, email")
         .in("id", memberUserIds);
+
+      console.log("🔍 DEBUG: User Profiles Query");
+      console.log("profilesError:", profilesError);
+      console.log("userProfilesData:", JSON.stringify(userProfilesData, null, 2));
 
       if (profilesError) {
         console.error("Error fetching user profiles:", profilesError);
@@ -133,12 +159,19 @@ export class NotificationService {
         userProfileMap.set(profile.id, { email: profile.email });
       });
 
+      console.log("🔍 DEBUG: User Profile Map");
+      console.log("userProfileMap:", Object.fromEntries(userProfileMap));
+
       // Get active push subscriptions for these users
       const { data: activeSubscriptions, error: subscriptionsError } = await supabaseClient
         .from("push_subscriptions")
         .select("*")
         .in("user_id", memberUserIds)
         .eq("push_active", true);
+
+      console.log("🔍 DEBUG: Push Subscriptions Query");
+      console.log("subscriptionsError:", subscriptionsError);
+      console.log("activeSubscriptions:", JSON.stringify(activeSubscriptions, null, 2));
 
       if (subscriptionsError) {
         console.error("Error fetching push subscriptions:", subscriptionsError);
@@ -286,6 +319,11 @@ export class NotificationService {
       // Accept either ONESIGNAL_API_KEY or ONESIGNAL_REST_API_KEY (existing secret name)
       const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY") || Deno.env.get("ONESIGNAL_REST_API_KEY");
 
+      console.log("🔍 DEBUG: OneSignal Environment Variables");
+      console.log("ONESIGNAL_APP_ID:", oneSignalAppId || "***NOT SET***");
+      console.log("ONESIGNAL_API_KEY:", oneSignalApiKey || "***NOT SET***");
+      console.log("ONESIGNAL_REST_API_KEY:", Deno.env.get("ONESIGNAL_REST_API_KEY") || "***NOT SET***");
+
       if (!oneSignalAppId || !oneSignalApiKey) {
         console.error("OneSignal APP ID or API Key not configured");
         return { success: false, error: "OneSignal APP ID or API Key not configured", providerResponse: null };
@@ -357,6 +395,12 @@ export class NotificationService {
 
   async logDualNotifications(userIds: string[], businessId: string, notificationData: NotificationPayload, results: any[]) {
     try {
+      console.log("🔍 DEBUG: Log Dual Notifications");
+      console.log("userIds:", userIds);
+      console.log("businessId:", businessId);
+      console.log("notificationData:", JSON.stringify(notificationData, null, 2));
+      console.log("results:", JSON.stringify(results, null, 2));
+
       const logs = results.map((result) => ({
         user_id: result.userId,
         subscription_id: result.subscriptionId || null,
@@ -374,6 +418,10 @@ export class NotificationService {
         sent_at: new Date().toISOString(),
         delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
       }));
+
+      console.log("🔍 DEBUG: Notification Logs to Insert");
+      console.log(JSON.stringify(logs, null, 2));
+
       // Diagnostic: log the payload we're about to insert
       try {
         console.log('Inserting notification_logs entries:', JSON.stringify(logs));
@@ -382,6 +430,9 @@ export class NotificationService {
       }
 
       const insertResult = await supabaseClient.from("notification_logs").insert(logs).select();
+      console.log("🔍 DEBUG: Insert Result");
+      console.log("insertResult:", JSON.stringify(insertResult, null, 2));
+
       if ((insertResult as any).error) {
         console.error("Failed to log dual notifications:", (insertResult as any).error);
       } else {

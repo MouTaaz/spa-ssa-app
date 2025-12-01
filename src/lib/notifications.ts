@@ -103,6 +103,17 @@ export async function initializeOneSignal(userId?: string) {
       await oneSignal.login(userId)
     }
 
+    // Listen for subscription changes to save to DB automatically
+    oneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+      console.log('🔍 DEBUG: Subscription change event:', isSubscribed)
+      if (isSubscribed) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await saveOneSignalSubscription(user.id)
+        }
+      }
+    })
+
     isInitialized = true
     console.log('OneSignal initialized successfully')
     return true
@@ -141,18 +152,30 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
       return false
     }
 
-    // Show native prompt for push notifications
-    await oneSignal.Slidedown.promptPush()
+    const platform = getPlatform()
+    console.log('🔍 DEBUG: Platform detected:', platform)
 
-    // Wait for subscription to be ready
-    const isSubscribed = await oneSignal.User.PushSubscription.optedIn
-    if (isSubscribed) {
-      // Save subscription to database
-      await saveOneSignalSubscription(userId)
+    if (platform === 'ios' || platform === 'android') {
+      // On mobile, the bell (notify button) handles subscription
+      // Permission granted, bell should appear, subscription happens on click
+      console.log("Mobile: Permission granted, bell should appear for subscription")
+      // Return true since permission is granted; subscription will happen via bell click
       return true
-    }
+    } else {
+      // Desktop: Use Slidedown for subscription
+      console.log("Desktop: Using Slidedown for subscription")
+      await oneSignal.Slidedown.promptPush()
 
-    return false
+      // Wait for subscription to be ready
+      const isSubscribed = await oneSignal.User.PushSubscription.optedIn
+      if (isSubscribed) {
+        // Save subscription to database
+        await saveOneSignalSubscription(userId)
+        return true
+      }
+
+      return false
+    }
   } catch (error) {
     console.error("Failed to subscribe to push notifications:", error)
     return false

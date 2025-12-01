@@ -299,17 +299,31 @@ export function useAppointments(userEmail: string | undefined) {
     const subscription = subscribeToAppointments(
       currentBusiness.id,
       async (payload) => {
-        if (payload.eventType === "INSERT") {
+        // Defensive: some realtime messages may be undefined or malformed
+        if (!payload) {
+          console.warn('Realtime subscription callback received empty payload')
+          return
+        }
+
+        const eventType = payload.eventType || payload.type || null
+        if (!eventType) {
+          console.warn('Realtime payload missing event type:', payload)
+          return
+        }
+
+        if (eventType === "INSERT") {
           // For new appointments, we need to process them to determine if they're rescheduled
           // Fetch the full data and re-process
           await fetchAppointments();
-        } else if (payload.eventType === "UPDATE") {
+        } else if (eventType === "UPDATE") {
           // Update the specific appointment in the store
           if (payload.new) {
             updateAppointment(payload.new.id, payload.new);
           }
-        } else if (payload.eventType === "DELETE") {
-          useAppStore.getState().removeAppointment(payload.old.id);
+        } else if (eventType === "DELETE") {
+          if (payload.old && payload.old.id) {
+            useAppStore.getState().removeAppointment(payload.old.id);
+          }
         }
       }
     );

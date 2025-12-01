@@ -522,10 +522,10 @@ export async function handlePushRegister(request: Request) {
       updated_at: new Date().toISOString()
     };
 
-    // Use upsert on user_id to create or update the subscription row.
+    // Upsert by the device-level onesignal_player_id so a single user may have multiple subscriptions/devices.
     const { data, error } = await supabaseClient
       .from('push_subscriptions')
-      .upsert([payload], { onConflict: 'user_id' })
+      .upsert([payload], { onConflict: 'onesignal_player_id' })
       .select()
       .single();
 

@@ -78,13 +78,23 @@ export async function initializeOneSignal(userId?: string) {
     const oneSignal = await loadOneSignal()
 
     console.log('🔍 DEBUG: Initializing OneSignal with config')
-    // Initialize OneSignal
-    await oneSignal.init({
-      appId: ONESIGNAL_APP_ID,
-      serviceWorkerPath: '/OneSignalSDKWorker.js',
-      serviceWorkerParam: { scope: '/' },
-      allowLocalhostAsSecureOrigin: true,
-    })
+    // Defensive: if init was already called elsewhere, handle gracefully
+    try {
+      await oneSignal.init({
+        appId: ONESIGNAL_APP_ID,
+        serviceWorkerPath: '/OneSignalSDKWorker.js',
+        serviceWorkerParam: { scope: '/' },
+        allowLocalhostAsSecureOrigin: true,
+      })
+    } catch (initError: any) {
+      // OneSignal throws when init is called twice; treat that as non-fatal
+      const msg = String(initError || '')
+      if (msg.includes('SDK already initialized') || msg.includes('already initialized')) {
+        console.info('OneSignal init skipped: SDK already initialized')
+      } else {
+        throw initError
+      }
+    }
 
     // Set external user ID if user is logged in
     if (userId) {
@@ -155,24 +165,44 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     const oneSignal = await loadOneSignal()
 
-    // Get OneSignal Player ID with retry logic
-    let playerId = await oneSignal.User.PushSubscription.id
-    console.log('🔍 DEBUG: Initial Player ID:', playerId)
-
+    // Get OneSignal Player ID with retry logic. Prefer getUserId(), fall back to PushSubscription.id
+    let playerId: string | null | undefined = undefined
+    const maxAttempts = 6
     let attempts = 0
-    const maxAttempts = 5
 
-    // Retry getting player ID if it's null (OneSignal might need time to initialize)
-    while (!playerId && attempts < maxAttempts) {
-      console.log(`Waiting for OneSignal Player ID... (attempt ${attempts + 1}/${maxAttempts})`)
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
-      playerId = await oneSignal.User.PushSubscription.id
-      console.log('🔍 DEBUG: Player ID after retry:', playerId)
+    while ((!playerId || playerId === '') && attempts < maxAttempts) {
+      try {
+        // Preferred modern API
+        if (typeof oneSignal.getUserId === 'function') {
+          // getUserId may return null if not yet available
+          // use await in case it returns a Promise
+          // @ts-ignore
+          const id = await oneSignal.getUserId()
+          playerId = id
+        }
+      } catch (e) {
+        // ignore and try fallback
+      }
+
+      // Fallback to older property if needed
+      if (!playerId && oneSignal.User && oneSignal.User.PushSubscription) {
+        try {
+          // @ts-ignore
+          playerId = await oneSignal.User.PushSubscription.id
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      console.log('🔍 DEBUG: Player ID attempt', attempts + 1, '->', playerId)
+
+      if (playerId) break
       attempts++
+      await new Promise(resolve => setTimeout(resolve, 1000))
     }
 
     if (!playerId) {
-      console.error("OneSignal Player ID not available after retries")
+      console.error('OneSignal Player ID not available after retries')
       return false
     }
 
@@ -187,11 +217,12 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     console.log('🔍 DEBUG: Subscription data to save:', JSON.stringify(subscriptionData, null, 2))
 
-    // Save to database
+    // Save to database (upsert keyed by user_id to avoid duplicate per-user rows)
     const { error, data } = await supabase
       .from('push_subscriptions')
       .upsert(subscriptionData, {
-        onConflict: 'user_id'
+        // Upsert by device-level identifier so one user can have multiple devices
+        onConflict: 'onesignal_player_id'
       })
 
     console.log('🔍 DEBUG: Database upsert result')

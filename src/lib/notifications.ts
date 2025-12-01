@@ -82,8 +82,7 @@ export async function initializeOneSignal(userId?: string) {
     try {
       await oneSignal.init({
         appId: ONESIGNAL_APP_ID,
-        serviceWorkerPath: '/OneSignalSDKWorker.js',
-        serviceWorkerParam: { scope: '/' },
+        // OneSignal v16 auto-manages its service worker file, do not specify serviceWorkerPath
         allowLocalhostAsSecureOrigin: true,
         notifyButton: { enable: true },
         safari_web_id: import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || undefined,

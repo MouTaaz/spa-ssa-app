@@ -85,6 +85,8 @@ export async function initializeOneSignal(userId?: string) {
         serviceWorkerPath: '/OneSignalSDKWorker.js',
         serviceWorkerParam: { scope: '/' },
         allowLocalhostAsSecureOrigin: true,
+        notifyButton: { enable: true },
+        safari_web_id: import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || undefined,
       })
     } catch (initError: any) {
       // OneSignal throws when init is called twice; treat that as non-fatal

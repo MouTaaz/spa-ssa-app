@@ -128,9 +128,21 @@ export async function initializeOneSignal(userId?: string) {
       oneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
         console.log('🔍 DEBUG: Subscription change event:', isSubscribed)
         if (isSubscribed) {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            await saveOneSignalSubscription(user.id)
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              // Add a small delay to ensure player ID is available
+              setTimeout(async () => {
+                const saved = await saveOneSignalSubscription(user.id)
+                if (saved) {
+                  console.log('✅ Subscription saved via event listener')
+                } else {
+                  console.warn('⚠️ Failed to save subscription via event listener')
+                }
+              }, 1000)
+            }
+          } catch (error) {
+            console.error('❌ Error handling subscription change event:', error)
           }
         }
       })
@@ -143,6 +155,52 @@ export async function initializeOneSignal(userId?: string) {
     console.error('❌ Failed to initialize OneSignal:', error)
     return false
   }
+}
+
+/**
+ * Wait for OneSignal Player ID to be available with exponential backoff
+ */
+async function waitForPlayerId(maxAttempts: number = 10, initialDelay: number = 500): Promise<boolean> {
+  const oneSignal = await loadOneSignal()
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // Try to get player ID
+      let playerId: string | null | undefined = undefined
+
+      // Preferred modern API
+      if (typeof oneSignal.getUserId === 'function') {
+        playerId = await oneSignal.getUserId()
+      }
+
+      // Fallback to older property if needed
+      if (!playerId && oneSignal.User && oneSignal.User.PushSubscription) {
+        playerId = await oneSignal.User.PushSubscription.id
+      }
+
+      if (playerId && playerId.trim() !== '') {
+        console.log(`✅ Player ID available after ${attempt} attempts:`, playerId)
+        return true
+      }
+
+      console.log(`⏳ Player ID not available yet (attempt ${attempt}/${maxAttempts})`)
+
+      // Exponential backoff: wait longer each time
+      if (attempt < maxAttempts) {
+        const delay = initialDelay * Math.pow(1.5, attempt - 1)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error checking player ID on attempt ${attempt}:`, error)
+      if (attempt < maxAttempts) {
+        const delay = initialDelay * Math.pow(1.5, attempt - 1)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  console.warn('❌ Player ID not available after maximum attempts')
+  return false
 }
 
 export async function requestNotificationPermission() {
@@ -181,7 +239,21 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
       // On mobile, the bell (notify button) handles subscription
       // Permission granted, bell should appear, subscription happens on click
       console.log("Mobile: Permission granted, bell should appear for subscription")
-      // Return true since permission is granted; subscription will happen via bell click
+
+      // Wait for player ID to be available with exponential backoff
+      const playerIdAvailable = await waitForPlayerId(10, 500) // 10 attempts, starting at 500ms
+
+      if (playerIdAvailable) {
+        // Try to save subscription now that player ID is available
+        const saved = await saveOneSignalSubscription(userId)
+        if (saved) {
+          console.log("Mobile: Subscription saved successfully")
+          return true
+        }
+      }
+
+      // If not saved immediately, it will be saved when subscription change event fires
+      console.log("Mobile: Subscription may be saved via event listener")
       return true
     } else {
       // Desktop: Use Slidedown for subscription

@@ -30,10 +30,17 @@ interface SubscriptionScope {
 /**
  * Detect current device scope (where service worker is registered)
  */
-export function detectDeviceScope(): string {
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    // Get the actual scope of the registered service worker
-    return navigator.serviceWorker.controller.scope || '/'
+export async function detectDeviceScope(): Promise<string> {
+  if ('serviceWorker' in navigator) {
+    try {
+      // Get the service worker registration to access the scope
+      const registration = await navigator.serviceWorker.getRegistration()
+      if (registration) {
+        return registration.scope || '/'
+      }
+    } catch (error) {
+      console.warn('Failed to get service worker registration:', error)
+    }
   }
 
   // Fallback: determine by user agent and platform
@@ -125,7 +132,7 @@ export async function registerDeviceSubscription(
     console.log('  Platform:', platform)
 
     // Detect device characteristics
-    const scope = detectDeviceScope()
+    const scope = await detectDeviceScope()
     const deviceType = detectDeviceType()
     const deviceName = generateDeviceName()
     const now = new Date().toISOString()

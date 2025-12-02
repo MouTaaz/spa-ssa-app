@@ -1,4 +1,12 @@
 import { supabase } from "./supabase"
+import {
+  registerDeviceSubscription,
+  updateDeviceLastActive,
+  cleanupInactiveSubscriptions,
+  detectDeviceScope,
+  detectDeviceType,
+  generateDeviceName,
+} from "./multi-device-subscriptions"
 
 // Declare OneSignal on window to satisfy TypeScript
 declare global {
@@ -198,14 +206,12 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
       try {
         // Preferred modern API
         if (typeof oneSignal.getUserId === 'function') {
-          // getUserId may return null if not yet available
-          // use await in case it returns a Promise
           // @ts-ignore
           const id = await oneSignal.getUserId()
           playerId = id
         }
       } catch (e) {
-        // ignore and try fallback
+        console.warn('Failed to get OneSignal user ID:', e)
       }
 
       // Fallback to older property if needed
@@ -214,7 +220,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
           // @ts-ignore
           playerId = await oneSignal.User.PushSubscription.id
         } catch (e) {
-          // ignore
+          console.warn('Failed to get OneSignal PushSubscription ID:', e)
         }
       }
 
@@ -222,46 +228,37 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
       if (playerId) break
       attempts++
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
     }
 
     if (!playerId) {
-      console.error('OneSignal Player ID not available after retries')
+      console.error('❌ OneSignal Player ID not available after retries')
       return false
     }
 
-    const subscriptionData = {
-      user_id: userId,
-      onesignal_player_id: playerId,
-      onesignal_external_user_id: userId,
-      platform: getPlatform(),
-      user_agent: navigator.userAgent,
-      updated_at: new Date().toISOString(),
-    }
+    console.log('✅ Got OneSignal Player ID:', playerId)
 
-    console.log('🔍 DEBUG: Subscription data to save:', JSON.stringify(subscriptionData, null, 2))
+    // Use the new multi-device registration system
+    const platform = getPlatform()
+    const success = await registerDeviceSubscription(userId, playerId, platform as any)
 
-    // Save to database (upsert keyed by user_id to avoid duplicate per-user rows)
-    const { error, data } = await supabase
-      .from('push_subscriptions')
-      .upsert(subscriptionData, {
-        // Upsert by device-level identifier so one user can have multiple devices
-        onConflict: 'onesignal_player_id'
-      })
-
-    console.log('🔍 DEBUG: Database upsert result')
-    console.log('error:', error)
-    console.log('data:', data)
-
-    if (error) {
-      console.error("Failed to save OneSignal subscription:", error)
+    if (!success) {
+      console.error("❌ Failed to register device subscription")
       return false
     }
 
-    console.log("✅ OneSignal subscription saved to database with Player ID:", playerId)
+    // Update last active timestamp
+    await updateDeviceLastActive(playerId)
+
+    // Cleanup any stale subscriptions
+    await cleanupInactiveSubscriptions(userId)
+
+    console.log("✅ OneSignal subscription saved with multi-device support")
     return true
   } catch (error) {
-    console.error("Error saving OneSignal subscription:", error)
+    console.error("❌ Error saving OneSignal subscription:", error)
     return false
   }
 }

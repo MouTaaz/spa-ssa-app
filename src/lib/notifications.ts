@@ -20,7 +20,7 @@ let OneSignal: any = null
 let isInitialized = false
 
 async function loadOneSignal() {
-  if (OneSignal) return OneSignal
+  if (OneSignal && typeof OneSignal.init === 'function') return OneSignal
 
   if (!window.OneSignal) {
     // Load OneSignal SDK
@@ -33,20 +33,32 @@ async function loadOneSignal() {
       document.head.appendChild(script)
     })
 
-    // Wait for OneSignal to be available
-    await new Promise(resolve => {
+    // Wait for OneSignal to be available (with timeout)
+    let attempts = 0
+    const maxAttempts = 50 // 5 seconds max
+    await new Promise((resolve, reject) => {
       const checkOneSignal = () => {
-        if (window.OneSignal) {
+        if (window.OneSignal && typeof window.OneSignal.init === 'function') {
           OneSignal = window.OneSignal
+          console.log('✅ OneSignal SDK loaded successfully')
           resolve(void 0)
-        } else {
+        } else if (attempts < maxAttempts) {
+          attempts++
           setTimeout(checkOneSignal, 100)
+        } else {
+          console.error('❌ OneSignal SDK failed to load after timeout')
+          reject(new Error('OneSignal SDK failed to load'))
         }
       }
       checkOneSignal()
     })
   } else {
     OneSignal = window.OneSignal
+    console.log('✅ OneSignal already available on window')
+  }
+
+  if (!OneSignal || typeof OneSignal.init !== 'function') {
+    throw new Error('OneSignal SDK loaded but init method not available')
   }
 
   return OneSignal
@@ -111,22 +123,24 @@ export async function initializeOneSignal(userId?: string) {
       await oneSignal.login(userId)
     }
 
-    // Listen for subscription changes to save to DB automatically
-    oneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-      console.log('🔍 DEBUG: Subscription change event:', isSubscribed)
-      if (isSubscribed) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          await saveOneSignalSubscription(user.id)
+    // Listen for subscription changes to save to DB automatically (if method exists)
+    if (oneSignal && typeof oneSignal.on === 'function') {
+      oneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
+        console.log('🔍 DEBUG: Subscription change event:', isSubscribed)
+        if (isSubscribed) {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await saveOneSignalSubscription(user.id)
+          }
         }
-      }
-    })
+      })
+    }
 
     isInitialized = true
-    console.log('OneSignal initialized successfully')
+    console.log('✅ OneSignal initialized successfully')
     return true
   } catch (error) {
-    console.error('Failed to initialize OneSignal:', error)
+    console.error('❌ Failed to initialize OneSignal:', error)
     return false
   }
 }

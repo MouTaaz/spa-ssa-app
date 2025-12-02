@@ -154,13 +154,32 @@ export async function registerDeviceSubscription(
 
     console.log('📱 Device subscription data:', subscriptionData)
 
-    // Upsert by player ID (device-level key) to allow multiple devices per user
-    const { error, data } = await supabase
+    // First try upsert by player_id (for existing unique constraint)
+    let { error, data } = await supabase
       .from('push_subscriptions')
       .upsert([subscriptionData], {
         onConflict: 'onesignal_player_id',
       })
       .select()
+
+    // If that fails, try upsert by user_id (fallback for different constraint setups)
+    if (error) {
+      console.warn('⚠️ Upsert by player_id failed, trying user_id:', error.message)
+      const { error: fallbackError, data: fallbackData } = await supabase
+        .from('push_subscriptions')
+        .upsert([subscriptionData], {
+          onConflict: 'user_id',
+        })
+        .select()
+
+      if (fallbackError) {
+        console.error('❌ Both upsert attempts failed:', fallbackError)
+        return false
+      }
+
+      error = fallbackError
+      data = fallbackData
+    }
 
     if (error) {
       console.error('❌ Failed to register device subscription:', error)

@@ -280,6 +280,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
   try {
     console.log('🔍 DEBUG: Save OneSignal Subscription')
     console.log('userId:', userId)
+    console.log('Platform:', getPlatform())
 
     const oneSignal = await loadOneSignal()
 
@@ -321,6 +322,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     if (!playerId) {
       console.error('❌ OneSignal Player ID not available after retries')
+      console.error('   This may indicate OneSignal SDK issues on mobile')
       return false
     }
 
@@ -328,10 +330,12 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     // Use the new multi-device registration system
     const platform = getPlatform()
+    console.log('🔍 DEBUG: Calling registerDeviceSubscription with platform:', platform)
     const success = await registerDeviceSubscription(userId, playerId, platform as any)
 
     if (!success) {
       console.error("❌ Failed to register device subscription")
+      console.error("   Check database constraints and RLS policies")
       return false
     }
 
@@ -345,6 +349,7 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
     return true
   } catch (error) {
     console.error("❌ Error saving OneSignal subscription:", error)
+    console.error("   Stack:", error instanceof Error ? error.stack : 'No stack available')
     return false
   }
 }

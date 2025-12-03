@@ -126,24 +126,50 @@ export async function initializeOneSignal(userId?: string) {
     // Listen for subscription changes to save to DB automatically (if method exists)
     if (oneSignal && typeof oneSignal.on === 'function') {
       oneSignal.on('subscriptionChange', async (isSubscribed: boolean) => {
-        console.log('🔍 DEBUG: Subscription change event:', isSubscribed)
+        console.log('🔍 DEBUG: Subscription change event fired')
+        console.log('   isSubscribed:', isSubscribed)
+        console.log('   Platform:', getPlatform())
+        console.log('   User Agent:', navigator.userAgent)
+
         if (isSubscribed) {
           try {
-            const { data: { user } } = await supabase.auth.getUser()
+            const { data: { user }, error: authError } = await supabase.auth.getUser()
+            console.log('🔍 DEBUG: Auth check result:', { user: user?.id, error: authError })
+
             if (user) {
-              // Add a small delay to ensure player ID is available
+              console.log('🔍 DEBUG: User authenticated, attempting to save subscription')
+
+              // For mobile, wait longer for player ID to be fully available
+              const delay = getPlatform() === 'ios' || getPlatform() === 'android' ? 3000 : 1000
+              console.log(`🔍 DEBUG: Waiting ${delay}ms for player ID to be available`)
+
               setTimeout(async () => {
+                console.log('🔍 DEBUG: Executing subscription save after delay')
                 const saved = await saveOneSignalSubscription(user.id)
                 if (saved) {
                   console.log('✅ Subscription saved via event listener')
                 } else {
                   console.warn('⚠️ Failed to save subscription via event listener')
+                  // Try one more time after additional delay
+                  setTimeout(async () => {
+                    console.log('🔍 DEBUG: Retrying subscription save')
+                    const retrySaved = await saveOneSignalSubscription(user.id)
+                    if (retrySaved) {
+                      console.log('✅ Subscription saved on retry')
+                    } else {
+                      console.error('❌ Subscription save failed on retry - manual intervention may be needed')
+                    }
+                  }, 2000)
                 }
-              }, 1000)
+              }, delay)
+            } else {
+              console.warn('⚠️ No authenticated user found during subscription change event')
             }
           } catch (error) {
             console.error('❌ Error handling subscription change event:', error)
           }
+        } else {
+          console.log('🔍 DEBUG: User unsubscribed from notifications')
         }
       })
     }

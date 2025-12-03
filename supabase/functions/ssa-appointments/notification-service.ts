@@ -53,6 +53,7 @@ export async function sendOneSignalPushNotification(
     console.log("Method: POST");
     console.log("Authorization: Basic", oneSignalApiKey ? "***SET***" : "***NOT SET***");
     console.log("Payload:", JSON.stringify(finalPayload, null, 2));
+console.log("Target IDs:", targetIds);
 
     // Send notification to OneSignal API
     const apiResponse = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -162,6 +163,7 @@ export class NotificationService {
       console.log("🔍 DEBUG: User Profile Map");
       console.log("userProfileMap:", Object.fromEntries(userProfileMap));
 
+      console.log(memberUserIds);
       // Get active push subscriptions for these users
       const { data: activeSubscriptions, error: subscriptionsError } = await supabaseClient
         .from("push_subscriptions")
@@ -330,29 +332,29 @@ export class NotificationService {
       }
 
       // Accept multiple possible field names that might hold the OneSignal player/external id
-      let userExternalId: string | null = null;
-      let isPlayerId = false;
+      // let userExternalId: string | null = null;
+      // let isPlayerId = false;
 
-      if (subscription.onesignal_player_id) {
-        userExternalId = subscription.onesignal_player_id;
-        isPlayerId = true;
-      } else if (subscription.one_signal_player_id) {
-        userExternalId = subscription.one_signal_player_id;
-        isPlayerId = true;
-      } else if (subscription.user_external_id) {
-        userExternalId = subscription.user_external_id;
-      } else if (subscription.onesignal_external_user_id) {
-        userExternalId = subscription.onesignal_external_user_id;
-      } else if (subscription.onesignal_external_id) {
-        userExternalId = subscription.onesignal_external_id;
-      }
+      // if (subscription.onesignal_player_id) {
+      //   userExternalId = subscription.onesignal_player_id;
+      //   isPlayerId = true;
+      // } else if (subscription.one_signal_player_id) {
+      //   userExternalId = subscription.one_signal_player_id;
+      //   isPlayerId = true;
+      // } else if (subscription.user_external_id) {
+      //   userExternalId = subscription.user_external_id;
+      // } else if (subscription.onesignal_external_user_id) {
+      //   userExternalId = subscription.onesignal_external_user_id;
+      // } else if (subscription.onesignal_external_id) {
+      //   userExternalId = subscription.onesignal_external_id;
+      // }
 
-      if (!userExternalId) {
-        console.error("Subscription missing OneSignal identifier (user_external_id / onesignal_player_id / onesignal_external_user_id)");
-        return { success: false, error: "Missing OneSignal id", providerResponse: null, subscriptionId: subscription.id };
-      }
+      // if (!userExternalId) {
+      //   console.error("Subscription missing OneSignal identifier (user_external_id / onesignal_player_id / onesignal_external_user_id)");
+      //   return { success: false, error: "Missing OneSignal id", providerResponse: null, subscriptionId: subscription.id };
+      // }
 
-      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [userExternalId], notificationData, { usePlayerIds: isPlayerId });
+      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [subscription.onesignal_external_user_id], notificationData, { usePlayerIds: false });
 
       if (!sendResult.ok) {
         console.error(`OneSignal send failed for subscription ${subscription.id}:`, sendResult.body);

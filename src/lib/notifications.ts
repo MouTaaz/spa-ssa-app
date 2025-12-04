@@ -104,7 +104,7 @@ export async function initializeOneSignal(userId?: string) {
         appId: ONESIGNAL_APP_ID,
         // OneSignal v16 auto-manages its service worker file, do not specify serviceWorkerPath
         allowLocalhostAsSecureOrigin: true,
-        notifyButton: { enable: true },
+        notifyButton: { enable: false },
         safari_web_id: import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || undefined,
       })
     } catch (initError: any) {

@@ -13,10 +13,10 @@ export function HomePage() {
       <div className="min-h-screen bg-linear-to-br from-slate-900 to-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-16">
           <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold text-white mb-4">
+            <h1 className="text-5xl font-bold text- from-slate-900 to-slate-800 mb-4">
               Welcome back, {user.full_name}!
             </h1>
-            <p className="text-xl text-slate-300">
+            <p className="text-xl text-slate-700">
               Manage your auto service appointments with ease
             </p>
           </div>

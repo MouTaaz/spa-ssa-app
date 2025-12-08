@@ -123,7 +123,8 @@ export function generateDeviceName(): string {
 export async function registerDeviceSubscription(
   userId: string,
   playerId: string,
-  platform: 'web' | 'ios' | 'android'
+  platform: 'web' | 'ios' | 'android',
+  externalUserId?: string
 ): Promise<boolean> {
   try {
     console.log('📱 Registering device subscription')
@@ -141,7 +142,7 @@ export async function registerDeviceSubscription(
     const subscriptionData: DeviceSubscription = {
       user_id: userId,
       onesignal_player_id: playerId,
-      onesignal_external_user_id: userId,
+      onesignal_external_user_id: externalUserId || userId,
       platform,
       device_type: deviceType,
       device_name: deviceName,

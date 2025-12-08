@@ -229,32 +229,26 @@ export class NotificationService {
       let pushNotificationSuccess = false;
       let emailNotificationSuccess = false;
       let pushProviderResponse: any = null;
-      let subscriptionIdForLogging: string | null = null;
+      let subscriptionIdsForLogging: string[] = [];
       let pushNotificationError: string | null = null;
 
-      // 1. Try push notification first (immediate delivery)
+      // 1. Try push notification first (send to external user ID once, not per subscription)
       if (userPushSubscriptions.length > 0) {
         console.log(`📱 Sending push notification to user ${userId} (${userPushSubscriptions.length} subscriptions)`);
-        const pushNotificationResults = await Promise.allSettled(
-          userPushSubscriptions.map((subscription) => this.sendPushNotification(subscription, notificationPayload))
-        );
 
-        // Check push results and capture provider response
-        for (const result of pushNotificationResults) {
-          if (result.status === 'fulfilled') {
-            if (result.value && result.value.subscriptionId) subscriptionIdForLogging = result.value.subscriptionId;
-          }
+        // Get unique external user ID (should be the same for all subscriptions of a user)
+        const externalUserId = userPushSubscriptions[0]?.onesignal_external_user_id;
+        if (externalUserId) {
+          console.log(`📱 Sending to external user ID: ${externalUserId}`);
+          const pushResult = await this.sendPushNotificationToExternalUserId(externalUserId, notificationPayload, userPushSubscriptions);
 
-          if (result.status === 'fulfilled' && result.value.success) {
-            pushNotificationSuccess = true;
-            pushProviderResponse = result.value.providerResponse;
-            if (result.value.subscriptionId) subscriptionIdForLogging = result.value.subscriptionId;
-            break;
-          } else if (result.status === 'fulfilled' && result.value && result.value.providerResponse) {
-            // Capture provider response even if failed
-            pushProviderResponse = result.value.providerResponse;
-            pushNotificationError = result.value.error || 'Push notification failed';
-          }
+          pushNotificationSuccess = pushResult.success;
+          pushProviderResponse = pushResult.providerResponse;
+          subscriptionIdsForLogging = userPushSubscriptions.map(sub => sub.id);
+          pushNotificationError = pushResult.error;
+        } else {
+          console.warn(`⚠️ No external user ID found for user ${userId}`);
+          pushNotificationError = 'No external user ID available';
         }
       }
 
@@ -284,7 +278,7 @@ export class NotificationService {
         pushSubscriptions: userPushSubscriptions.length,
         hasEmail: !!userProfile?.email,
         providerResponse: pushProviderResponse,
-        subscriptionId: subscriptionIdForLogging,
+        subscriptionIds: subscriptionIdsForLogging,
         error: pushNotificationError || emailNotificationError || (pushNotificationSuccess || emailNotificationSuccess ? null : 'No notification sent')
       });
     }
@@ -311,6 +305,76 @@ export class NotificationService {
       [NOTIFICATION_TYPES.TEST_NOTIFICATION]: `Test Notification: ${appointment.customer_name}`
     };
     return typeSubjects[type] || baseSubject;
+  }
+
+  /**
+   * Send push notification to a specific external user ID (sends to ALL devices for that user)
+   */
+  async sendPushNotificationToExternalUserId(externalUserId: string, notificationData: NotificationPayload, subscriptions: any[]) {
+    try {
+      console.log(`📱 Sending push notification to external user ID: ${externalUserId}`);
+
+      const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
+      const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY") || Deno.env.get("ONESIGNAL_REST_API_KEY");
+
+      console.log("🔍 DEBUG: OneSignal Environment Variables");
+      console.log("ONESIGNAL_APP_ID:", oneSignalAppId || "***NOT SET***");
+      console.log("ONESIGNAL_API_KEY:", oneSignalApiKey || "***NOT SET***");
+
+      if (!oneSignalAppId || !oneSignalApiKey) {
+        console.error("OneSignal APP ID or API Key not configured");
+        return { success: false, error: "OneSignal APP ID or API Key not configured", providerResponse: null };
+      }
+
+      const sendResult = await sendOneSignalPushNotification(oneSignalAppId, oneSignalApiKey, [externalUserId], notificationData, { usePlayerIds: false });
+
+      if (!sendResult.ok) {
+        console.error(`OneSignal send failed for external user ID ${externalUserId}:`, sendResult.body);
+
+        // Handle invalid external user IDs (unsubscribed users)
+        if (sendResult.body?.warnings?.invalid_external_user_ids) {
+          console.warn(`⚠️ OneSignal warning for external user ID ${externalUserId}: ${sendResult.body.warnings.invalid_external_user_ids}`);
+
+          // Extract the invalid external user IDs from the warning message
+          const warningMessage = sendResult.body.warnings.invalid_external_user_ids;
+          const invalidIdsMatch = warningMessage.match(/\[([^\]]+)\]/);
+          if (invalidIdsMatch) {
+            const invalidIds = invalidIdsMatch[1].split(',').map((id: string) => id.trim().replace(/"/g, ''));
+            if (invalidIds.includes(externalUserId)) {
+              console.log(`Marking subscriptions for external user ID ${externalUserId} as inactive due to unsubscribed user`);
+              try {
+                const subscriptionIds = subscriptions.map(sub => sub.id);
+                const { error: clearError } = await supabaseClient
+                  .from('push_subscriptions')
+                  .update({ push_active: false })
+                  .in('id', subscriptionIds);
+                if (clearError) {
+                  console.error(`Failed to deactivate subscriptions for external user ID ${externalUserId}:`, clearError);
+                } else {
+                  console.log(`Deactivated ${subscriptionIds.length} subscriptions due to unsubscribed external user ID`);
+                }
+              } catch (e) {
+                console.error('Error while handling invalid_external_user_ids cleanup:', e);
+              }
+            }
+          }
+        }
+
+        return { success: false, error: 'Failed to send OneSignal push notification', providerResponse: sendResult.body };
+      }
+
+      // Log provider response for diagnostics
+      try {
+        console.log(`OneSignal send result for external user ID ${externalUserId}:`, JSON.stringify(sendResult.body));
+      } catch (e) {
+        console.log(`OneSignal send result for external user ID ${externalUserId}: (non-JSON response)`);
+      }
+
+      return { success: true, providerResponse: sendResult.body };
+    } catch (error: any) {
+      console.error(`Push notification failed for external user ID ${externalUserId}:`, error?.message ?? error);
+      return { success: false, error: error?.message ?? String(error), providerResponse: null };
+    }
   }
 
   async sendPushNotification(subscription: any, notificationData: NotificationPayload) {
@@ -403,23 +467,38 @@ export class NotificationService {
       console.log("notificationData:", JSON.stringify(notificationData, null, 2));
       console.log("results:", JSON.stringify(results, null, 2));
 
-      const logs = results.map((result) => ({
-        user_id: result.userId,
-        subscription_id: result.subscriptionId || null,
-        business_id: businessId,
-        notification_type: notificationData.type,
-        title: notificationData.title,
-        body: notificationData.body,
-        data: {
-          appointmentUrl: notificationData.url,
-          appointmentId: notificationData.appointmentId,
-          providerResponse: result.providerResponse // Store in data field instead
-        },
-        status: result.pushSuccess || result.emailSuccess ? 'sent' : 'failed',
-        error_message: !result.pushSuccess && !result.emailSuccess ? (result.error || 'Both push and email failed') : null,
-        sent_at: new Date().toISOString(),
-        delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
-      }));
+      const logs = results.flatMap((result) => {
+        const baseLogEntry = {
+          user_id: result.userId,
+          business_id: businessId,
+          notification_type: notificationData.type,
+          title: notificationData.title,
+          body: notificationData.body,
+          data: {
+            appointmentUrl: notificationData.url,
+            appointmentId: notificationData.appointmentId,
+            providerResponse: result.providerResponse // Store in data field instead
+          },
+          status: result.pushSuccess || result.emailSuccess ? 'sent' : 'failed',
+          error_message: !result.pushSuccess && !result.emailSuccess ? (result.error || 'Both push and email failed') : null,
+          sent_at: new Date().toISOString(),
+          delivery_method: result.pushSuccess && result.emailSuccess ? 'both' : result.pushSuccess ? 'push' : result.emailSuccess ? 'email' : 'none'
+        };
+
+        // If there are subscription IDs (push notifications), create one log entry per subscription
+        if (result.subscriptionIds && result.subscriptionIds.length > 0) {
+          return result.subscriptionIds.map((subscriptionId: string) => ({
+            ...baseLogEntry,
+            subscription_id: subscriptionId
+          }));
+        }
+
+        // If no subscription IDs (email-only or failed push), create one log entry with null subscription_id
+        return [{
+          ...baseLogEntry,
+          subscription_id: null
+        }];
+      });
 
       console.log("🔍 DEBUG: Notification Logs to Insert");
       console.log(JSON.stringify(logs, null, 2));

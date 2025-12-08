@@ -354,10 +354,30 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     console.log('✅ Got OneSignal Player ID:', playerId)
 
+    // Get the actual external user ID from OneSignal instead of assuming it's the userId
+    let externalUserId: string | null = null
+    try {
+      if (typeof oneSignal.getExternalUserId === 'function') {
+        externalUserId = await oneSignal.getExternalUserId()
+        console.log('🔍 DEBUG: Got external user ID from OneSignal:', externalUserId)
+      } else if (oneSignal.User && typeof oneSignal.User.getExternalUserId === 'function') {
+        externalUserId = await oneSignal.User.getExternalUserId()
+        console.log('🔍 DEBUG: Got external user ID from OneSignal.User:', externalUserId)
+      }
+    } catch (e) {
+      console.warn('Failed to get external user ID from OneSignal:', e)
+    }
+
+    // Fallback to userId if we can't get it from OneSignal
+    if (!externalUserId) {
+      externalUserId = userId
+      console.log('🔍 DEBUG: Using userId as external user ID fallback:', externalUserId)
+    }
+
     // Use the new multi-device registration system
     const platform = getPlatform()
     console.log('🔍 DEBUG: Calling registerDeviceSubscription with platform:', platform)
-    const success = await registerDeviceSubscription(userId, playerId, platform as any)
+    const success = await registerDeviceSubscription(userId, playerId, platform as any, externalUserId)
 
     if (!success) {
       console.error("❌ Failed to register device subscription")

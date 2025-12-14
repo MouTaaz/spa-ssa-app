@@ -317,6 +317,27 @@ export async function handleWebhook(webhookPayload: WebhookPayload, businessId: 
 
     if (upsertError) throw upsertError;
 
+    // Insert reminder for 2 hours before appointment if it's a new booking or rescheduled
+    if (normalizedActionType === APPOINTMENT_ACTIONS.BOOKED || normalizedActionType === APPOINTMENT_ACTIONS.RESCHEDULED) {
+      const reminderScheduledFor = new Date(updatedAppointmentData.start_time);
+      reminderScheduledFor.setHours(reminderScheduledFor.getHours() - 2);
+
+      const { error: reminderError } = await supabaseClient
+        .from("appointment_reminders")
+        .insert([{
+          appointment_id: updatedAppointmentData.id,
+          reminder_type: 'two_hours',
+          scheduled_for: reminderScheduledFor.toISOString(),
+          status: 'pending'
+        }]);
+
+      if (reminderError) {
+        console.error("Failed to insert appointment reminder:", reminderError);
+      } else {
+        console.log(`Inserted 2-hour reminder for appointment ${updatedAppointmentData.external_id}`);
+      }
+    }
+
     // Create history record with proper source mapping
     if (existingAppointmentData) {
       await createHistoryRecord(appointmentExternalId, normalizedActionType, existingAppointmentData, mappedAppointmentData, changeSource);

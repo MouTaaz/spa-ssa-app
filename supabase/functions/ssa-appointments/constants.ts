@@ -16,6 +16,7 @@ export const NOTIFICATION_TYPES = {
   APPOINTMENT_BOOKED: 'appointment_booked',
   APPOINTMENT_EDITED: 'appointment_edited',
   APPOINTMENT_CANCELLED: 'appointment_cancelled',
+  APPOINTMENT_REMINDER: 'appointment_reminder',
   TEST_NOTIFICATION: 'test_notification'
 } as const;
 

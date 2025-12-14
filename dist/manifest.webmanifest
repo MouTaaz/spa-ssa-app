@@ -1,1 +1,1 @@
-{"name":"SSA Manager","short_name":"SSA App","description":"Auto service appointment management platform","start_url":"/","display":"standalone","background_color":"#0f172a","theme_color":"#0f172a","lang":"en","scope":"/","icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icon-512.png","sizes":"512x512","type":"image/png"}]}
+{"name":"spa-ssa-app","short_name":"spa-ssa-app","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#42b883","lang":"en","scope":"/"}

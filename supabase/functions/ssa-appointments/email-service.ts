@@ -139,7 +139,8 @@ export class EmailService {
       booked: "New Appointment Booked",
       edited: "Appointment Updated",
       cancelled: "Appointment Cancelled",
-      rescheduled: "Appointment Rescheduled"
+      rescheduled: "Appointment Rescheduled",
+      reminder: "Appointment Reminder"
     };
 
     const emailTitle = actionTitleMap[actionType as keyof typeof actionTitleMap] || "Appointment Update";

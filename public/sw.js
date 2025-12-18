@@ -1,278 +1,93 @@
-// Service Worker for SPA SSA App - Production
-const CACHE_NAME = "spa-ssa-v1.0.0";
-const RUNTIME_CACHE = "spa-ssa-runtime-v1";
 
-// Core app shell - cache these immediately
-const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
-];
+    // Based off of https://github.com/pwa-builder/PWABuilder/blob/main/docs/sw.js
 
-// Install event - cache static assets
-self.addEventListener("install", (event) => {
-  console.log("Service Worker: Installing");
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => {
-        console.log("Service Worker: Caching static assets");
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => self.skipWaiting())
-  );
-});
+    /*
+      Welcome to our basic Service Worker! This Service Worker offers a basic offline experience
+      while also being easily customizeable. You can add in your own code to implement the capabilities
+      listed below, or change anything else you would like.
 
-// Activate event - clean up old caches
-self.addEventListener("activate", (event) => {
-  console.log("Service Worker: Activating");
-  event.waitUntil(
-    caches
-      .keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
-              console.log("Service Worker: Deleting old cache", cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => self.clients.claim())
-  );
-});
 
-// Fetch event - smart caching strategies
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+      Need an introduction to Service Workers? Check our docs here: https://docs.pwabuilder.com/#/home/sw-intro
+      Want to learn more about how our Service Worker generation works? Check our docs here: https://docs.pwabuilder.com/#/studio/existing-app?id=add-a-service-worker
 
-  // Skip non-GET requests
-  if (request.method !== "GET") return;
+      Did you know that Service Workers offer many more capabilities than just offline? 
+        - Background Sync: https://microsoft.github.io/win-student-devs/#/30DaysOfPWA/advanced-capabilities/06
+        - Periodic Background Sync: https://web.dev/periodic-background-sync/
+        - Push Notifications: https://microsoft.github.io/win-student-devs/#/30DaysOfPWA/advanced-capabilities/07?id=push-notifications-on-the-web
+        - Badges: https://microsoft.github.io/win-student-devs/#/30DaysOfPWA/advanced-capabilities/07?id=application-badges
+    */
 
-  // Skip chrome-extension requests as they are not supported by Cache API
-  if (url.protocol === "chrome-extension:") return;
+    const HOSTNAME_WHITELIST = [
+        self.location.hostname,
+        'fonts.gstatic.com',
+        'fonts.googleapis.com',
+        'cdn.jsdelivr.net'
+    ]
 
-  // Network First for API calls
-  if (url.pathname.includes("/api/") || url.hostname.includes("supabase.co")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Cache successful API responses
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Fallback to cache when offline
-          return caches.match(request);
-        })
-    );
-    return;
-  }
+    // The Util Function to hack URLs of intercepted requests
+    const getFixedUrl = (req) => {
+        var now = Date.now()
+        var url = new URL(req.url)
 
-  // Cache First for static assets
-  if (
-    url.pathname.includes("/assets/") ||
-    url.pathname.includes("/static/") ||
-    url.pathname.endsWith(".js") ||
-    url.pathname.endsWith(".css") ||
-    url.pathname.endsWith(".png") ||
-    url.pathname.endsWith(".ico")
-  ) {
-    event.respondWith(
-      caches.match(request).then((response) => {
-        if (response) {
-          return response;
+        // 1. fixed http URL
+        // Just keep syncing with location.protocol
+        // fetch(httpURL) belongs to active mixed content.
+        // And fetch(httpRequest) is not supported yet.
+        url.protocol = self.location.protocol
+
+        // 2. add query for caching-busting.
+        // Github Pages served with Cache-Control: max-age=600
+        // max-age on mutable content is error-prone, with SW life of bugs can even extend.
+        // Until cache mode of Fetch API landed, we have to workaround cache-busting with query string.
+        // Cache-Control-Bug: https://bugs.chromium.org/p/chromium/issues/detail?id=453190
+        if (url.hostname === self.location.hostname) {
+            url.search += (url.search ? '&' : '?') + 'cache-bust=' + now
         }
-        return fetch(request).then((response) => {
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // Network First for HTML pages
-  if (request.headers.get("accept")?.includes("text/html")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match("/index.html");
-        })
-    );
-    return;
-  }
-
-  // Default: Network First
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        return caches.match(request);
-      })
-  );
-});
-
-// Background sync for offline actions
-self.addEventListener("sync", (event) => {
-  if (event.tag === "background-sync") {
-    console.log("Service Worker: Background sync triggered");
-    event.waitUntil(doBackgroundSync());
-  }
-});
-
-// Message handling from main app
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-
-  if (event.data && event.data.type === "SYNC_DATA") {
-    console.log("Service Worker: Sync data requested");
-    doBackgroundSync();
-  }
-});
-
-async function doBackgroundSync() {
-  console.log("Service Worker: Performing background sync");
-  // Implement your background sync logic here
-  // This could sync offline appointments, etc.
-}
-
-// Push notifications handling
-self.addEventListener("push", (event) => {
-  if (!event.data) return;
-
-  const data = event.data.json();
-  const options = {
-    body: data.body || "New notification from SSA App",
-    icon: "/icon-192.png",
-    badge: "/icon-96.png",
-    tag: data.tag || "ssa-notification",
-    data: data.data || {},
-    requireInteraction: data.requireInteraction || false,
-    silent: data.silent || false,
-    actions: data.actions || [],
-    timestamp: data.timestamp || Date.now(),
-  };
-
-  // Add vibration for mobile devices
-  if ("vibrate" in navigator) {
-    options.vibrate = [200, 100, 200];
-  }
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || "SSA Manager", options)
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  const notificationData = event.notification.data || {};
-  let targetUrl = "/";
-
-  // Handle different notification types
-  if (
-    notificationData.type === "appointment_reminder" &&
-    notificationData.appointmentId
-  ) {
-    targetUrl = `/appointments/${notificationData.appointmentId}`;
-  } else if (
-    notificationData.type === "appointment_update" &&
-    notificationData.appointmentId
-  ) {
-    targetUrl = `/appointments/${notificationData.appointmentId}`;
-  } else if (notificationData.url) {
-    targetUrl = notificationData.url;
-  }
-
-  event.waitUntil(
-    clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        // Check if app is already open
-        for (const client of clientList) {
-          if (client.url.includes(targetUrl) && "focus" in client) {
-            return client.focus();
-          }
-        }
-
-        // Open new window/tab if not already open
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
-      })
-  );
-});
-
-// Background sync for offline functionality
-self.addEventListener("sync", (event) => {
-  console.log("Service Worker: Background sync triggered", event.tag);
-
-  if (event.tag === "sync-appointments") {
-    event.waitUntil(syncAppointments());
-  } else if (event.tag === "sync-notifications") {
-    event.waitUntil(syncNotifications());
-  }
-});
-
-async function syncAppointments() {
-  try {
-    // Sync offline appointment changes
-    const cache = await caches.open("offline-queue");
-    const requests = await cache.keys();
-
-    for (const request of requests) {
-      if (request.url.includes("/api/appointments")) {
-        try {
-          await fetch(request);
-          await cache.delete(request);
-        } catch (error) {
-          console.error("Failed to sync appointment:", error);
-        }
-      }
+        return url.href
     }
-  } catch (error) {
-    console.error("Background sync failed:", error);
-  }
-}
 
-async function syncNotifications() {
-  try {
-    // Mark notifications as read or handle other notification sync tasks
-    console.log("Syncing notifications...");
-    // Implementation depends on specific notification sync requirements
-  } catch (error) {
-    console.error("Notification sync failed:", error);
-  }
-}
+    /**
+     *  @Lifecycle Activate
+     *  New one activated when old isnt being used.
+     *
+     *  waitUntil(): activating ====> activated
+     */
+    self.addEventListener('activate', event => {
+      event.waitUntil(self.clients.claim())
+    })
+
+    /**
+     *  @Functional Fetch
+     *  All network requests are being intercepted here.
+     *
+     *  void respondWith(Promise<Response> r)
+     */
+    self.addEventListener('fetch', event => {
+    // Skip some of cross-origin requests, like those for Google Analytics.
+    if (HOSTNAME_WHITELIST.indexOf(new URL(event.request.url).hostname) > -1) {
+        // Stale-while-revalidate
+        // similar to HTTP's stale-while-revalidate: https://www.mnot.net/blog/2007/12/12/stale
+        // Upgrade from Jake's to Surma's: https://gist.github.com/surma/eb441223daaedf880801ad80006389f1
+        const cached = caches.match(event.request)
+        const fixedUrl = getFixedUrl(event.request)
+        const fetched = fetch(fixedUrl, { cache: 'no-store' })
+        const fetchedCopy = fetched.then(resp => resp.clone())
+
+        // Call respondWith() with whatever we get first.
+        // If the fetch fails (e.g disconnected), wait for the cache.
+        // If there’s nothing in cache, wait for the fetch.
+        // If neither yields a response, return offline pages.
+        event.respondWith(
+        Promise.race([fetched.catch(_ => cached), cached])
+            .then(resp => resp || fetched)
+            .catch(_ => { /* eat any errors */ })
+        )
+
+        // Update the cache with the version we fetched (only for ok status)
+        event.waitUntil(
+        Promise.all([fetchedCopy, caches.open("pwa-cache")])
+            .then(([response, cache]) => response.ok && cache.put(event.request, response))
+            .catch(_ => { /* eat any errors */ })
+        )
+    }
+    })

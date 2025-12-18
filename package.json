@@ -28,6 +28,7 @@
     "tailwind-merge": "^2.5.4",
     "vite-plugin-pwa": "^1.1.0",
     "web-push": "3.6.6",
+    "workbox-precaching": "^7.4.0",
     "workbox-window": "^7.1.0",
     "zod": "^4.1.13",
     "zustand": "^5.0.8"

@@ -186,47 +186,68 @@ export async function initializeOneSignal(userId?: string) {
 /**
  * Wait for OneSignal Player ID to be available with exponential backoff
  */
-async function waitForPlayerId(maxAttempts: number = 10, initialDelay: number = 500): Promise<boolean> {
+async function waitForPlayerId(maxAttempts: number = 15, initialDelay: number = 800): Promise<string | null> {
   const oneSignal = await loadOneSignal()
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // Try to get player ID
+      // Try to get player ID using multiple methods
       let playerId: string | null | undefined = undefined
 
-      // Preferred modern API
+      // Method 1: Modern getUserId API
       if (typeof oneSignal.getUserId === 'function') {
-        playerId = await oneSignal.getUserId()
+        try {
+          playerId = await oneSignal.getUserId()
+        } catch (e) {
+          console.warn(`Attempt ${attempt}: getUserId() failed:`, e)
+        }
       }
 
-      // Fallback to older property if needed
+      // Method 2: User.PushSubscription.id
       if (!playerId && oneSignal.User && oneSignal.User.PushSubscription) {
-        playerId = await oneSignal.User.PushSubscription.id
+        try {
+          playerId = await oneSignal.User.PushSubscription.id
+        } catch (e) {
+          console.warn(`Attempt ${attempt}: User.PushSubscription.id failed:`, e)
+        }
+      }
+
+      // Method 3: Check if user is subscribed first
+      if (!playerId && oneSignal.User && oneSignal.User.PushSubscription) {
+        try {
+          const isSubscribed = await oneSignal.User.PushSubscription.optedIn
+          if (isSubscribed) {
+            playerId = await oneSignal.User.PushSubscription.id
+          }
+        } catch (e) {
+          console.warn(`Attempt ${attempt}: Subscription check failed:`, e)
+        }
       }
 
       if (playerId && playerId.trim() !== '') {
-        console.log(`✅ Player ID available after ${attempt} attempts:`, playerId)
-        return true
+        console.log(`✅ Player ID retrieved after ${attempt} attempt(s):`, playerId)
+        return playerId
       }
 
       console.log(`⏳ Player ID not available yet (attempt ${attempt}/${maxAttempts})`)
 
       // Exponential backoff: wait longer each time
       if (attempt < maxAttempts) {
-        const delay = initialDelay * Math.pow(1.5, attempt - 1)
+        const delay = Math.min(initialDelay * Math.pow(1.5, attempt - 1), 5000) // Cap at 5 seconds
+        console.log(`   Waiting ${delay}ms before retry...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     } catch (error) {
       console.warn(`⚠️ Error checking player ID on attempt ${attempt}:`, error)
       if (attempt < maxAttempts) {
-        const delay = initialDelay * Math.pow(1.5, attempt - 1)
+        const delay = Math.min(initialDelay * Math.pow(1.5, attempt - 1), 5000)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     }
   }
 
-  console.warn('❌ Player ID not available after maximum attempts')
-  return false
+  console.error('❌ Player ID not available after maximum attempts')
+  return null
 }
 
 export async function requestNotificationPermission() {
@@ -266,10 +287,10 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
       // Permission granted, bell should appear, subscription happens on click
       console.log("Mobile: Permission granted, bell should appear for subscription")
 
-      // Wait for player ID to be available with exponential backoff
-      const playerIdAvailable = await waitForPlayerId(10, 500) // 10 attempts, starting at 500ms
+      // Wait for player ID to be available with improved retry logic
+      const playerId = await waitForPlayerId(15, 800) // 15 attempts, starting at 800ms
 
-      if (playerIdAvailable) {
+      if (playerId) {
         // Try to save subscription now that player ID is available
         const saved = await saveOneSignalSubscription(userId)
         if (saved) {
@@ -284,14 +305,22 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
     } else {
       // Desktop: Use Slidedown for subscription
       console.log("Desktop: Using Slidedown for subscription")
-      await oneSignal.Slidedown.promptPush()
+      
+      try {
+        await oneSignal.Slidedown.promptPush()
+      } catch (slidedownError) {
+        console.warn("Slidedown prompt failed, trying alternative method:", slidedownError)
+        // Fallback to native prompt
+        await oneSignal.showNativePrompt()
+      }
 
-      // Wait for subscription to be ready
-      const isSubscribed = await oneSignal.User.PushSubscription.optedIn
-      if (isSubscribed) {
+      // Wait for player ID with improved retry logic
+      const playerId = await waitForPlayerId(15, 800)
+      
+      if (playerId) {
         // Save subscription to database
-        await saveOneSignalSubscription(userId)
-        return true
+        const saved = await saveOneSignalSubscription(userId)
+        return saved
       }
 
       return false
@@ -310,45 +339,16 @@ export async function saveOneSignalSubscription(userId: string): Promise<boolean
 
     const oneSignal = await loadOneSignal()
 
-    // Get OneSignal Player ID with retry logic. Prefer getUserId(), fall back to PushSubscription.id
-    let playerId: string | null | undefined = undefined
-    const maxAttempts = 6
-    let attempts = 0
-
-    while ((!playerId || playerId === '') && attempts < maxAttempts) {
-      try {
-        // Preferred modern API
-        if (typeof oneSignal.getUserId === 'function') {
-          // @ts-ignore
-          const id = await oneSignal.getUserId()
-          playerId = id
-        }
-      } catch (e) {
-        console.warn('Failed to get OneSignal user ID:', e)
-      }
-
-      // Fallback to older property if needed
-      if (!playerId && oneSignal.User && oneSignal.User.PushSubscription) {
-        try {
-          // @ts-ignore
-          playerId = await oneSignal.User.PushSubscription.id
-        } catch (e) {
-          console.warn('Failed to get OneSignal PushSubscription ID:', e)
-        }
-      }
-
-      console.log('🔍 DEBUG: Player ID attempt', attempts + 1, '->', playerId)
-
-      if (playerId) break
-      attempts++
-      if (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
-    }
+    // Use improved waitForPlayerId function
+    const playerId = await waitForPlayerId(15, 800)
 
     if (!playerId) {
       console.error('❌ OneSignal Player ID not available after retries')
-      console.error('   This may indicate OneSignal SDK issues on mobile')
+      console.error('   This may indicate OneSignal SDK issues')
+      console.error('   Possible causes:')
+      console.error('   - OneSignal not fully initialized')
+      console.error('   - User not subscribed to push notifications')
+      console.error('   - Service worker not registered properly')
       return false
     }
 

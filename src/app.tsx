@@ -73,22 +73,51 @@ export function App() {
         // Initialize IndexedDB
         await initializeDB();
 
-        // Register Service Worker in production only
-        if ("serviceWorker" in navigator && import.meta.env.PROD) {
+        // Register Service Worker (both dev and production for testing)
+        if ("serviceWorker" in navigator) {
           try {
-            await navigator.serviceWorker.register("/sw.js", {
-              scope: "/",
-            });
-            console.log("Service Worker registered successfully");
+            console.log("🔧 Registering Service Worker...");
+            const registration = await navigator.serviceWorker.register(
+              "/sw.js",
+              {
+                scope: "/",
+              }
+            );
+            console.log(
+              "✅ Service Worker registered successfully:",
+              registration.scope
+            );
 
-            // Initialize OneSignal after service worker is registered
-            await initializeOneSignal(user?.id);
+            // Wait for service worker to be ready
+            await navigator.serviceWorker.ready;
+            console.log("✅ Service Worker is ready");
+
+            // Initialize OneSignal after service worker is ready
+            // Wait a bit to ensure service worker is fully active
+            setTimeout(async () => {
+              console.log("🔧 Initializing OneSignal...");
+              const initialized = await initializeOneSignal(user?.id);
+              if (initialized) {
+                console.log("✅ OneSignal initialized successfully");
+              } else {
+                console.warn("⚠️ OneSignal initialization failed");
+              }
+            }, 500);
           } catch (error) {
-            console.log("SW registration failed: ", error);
+            console.error("❌ SW registration failed:", error);
+            // Try to initialize OneSignal anyway (it may work without custom SW)
+            setTimeout(async () => {
+              console.log(
+                "🔧 Attempting OneSignal initialization without custom SW..."
+              );
+              await initializeOneSignal(user?.id);
+            }, 500);
           }
+        } else {
+          console.warn("⚠️ Service Workers not supported in this browser");
         }
       } catch (error) {
-        console.error("App initialization failed:", error);
+        console.error("❌ App initialization failed:", error);
       }
     };
 
@@ -105,7 +134,7 @@ export function App() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [user?.id]);
 
   return (
     <BrowserRouter>

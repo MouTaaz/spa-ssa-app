@@ -66,6 +66,7 @@ async function loadOneSignal() {
 
 // OneSignal App ID - should be set as environment variable
 const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesignal-app-id'
+const ONESIGNAL_SAFARI_WEB_ID = import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID
 
 export async function initializeOneSignal(userId?: string) {
   try {
@@ -73,6 +74,8 @@ export async function initializeOneSignal(userId?: string) {
     console.log('userId:', userId)
     console.log('isInitialized:', isInitialized)
     console.log('ONESIGNAL_APP_ID:', ONESIGNAL_APP_ID)
+    console.log('Platform:', getPlatform())
+    console.log('User Agent:', navigator.userAgent)
 
     // Check if already initialized
     if (isInitialized) {
@@ -90,28 +93,50 @@ export async function initializeOneSignal(userId?: string) {
     if ('serviceWorker' in navigator) {
       try {
         await navigator.serviceWorker.ready
-        console.log('Service worker is ready, initializing OneSignal')
+        console.log('✅ Service worker is ready, initializing OneSignal')
       } catch (error) {
-        console.warn('Service worker not ready, proceeding anyway:', error)
+        console.warn('⚠️ Service worker not ready, proceeding anyway:', error)
       }
     }
+    
     const oneSignal = await loadOneSignal()
+    const platform = getPlatform()
 
     console.log('🔍 DEBUG: Initializing OneSignal with config')
+    
+    // Build configuration object
+    const config: any = {
+      appId: ONESIGNAL_APP_ID,
+      allowLocalhostAsSecureOrigin: true,
+      notifyButton: { enable: false },
+    }
+
+    // Add Safari Web ID for iOS support (OPTIONAL - only if using Apple Safari Web Push)
+    // For standard Web Push (FCM), this is not required
+    if (ONESIGNAL_SAFARI_WEB_ID && (platform === 'ios' || /safari/i.test(navigator.userAgent))) {
+      config.safari_web_id = ONESIGNAL_SAFARI_WEB_ID
+      console.log('🔍 DEBUG: Safari Web ID configured for iOS/Safari')
+    } else if (platform === 'ios') {
+      console.log('🔍 DEBUG: Using standard Web Push for iOS (no Safari Web ID required)')
+    }
+
+    // iOS-specific configuration for service worker
+    if (platform === 'ios') {
+      console.log('🔍 DEBUG: Applying iOS-specific OneSignal configuration')
+      // iOS requires explicit service worker path
+      config.serviceWorkerParam = { scope: '/' }
+      config.serviceWorkerPath = 'OneSignalSDKWorker.js'
+    }
+
     // Defensive: if init was already called elsewhere, handle gracefully
     try {
-      await oneSignal.init({
-        appId: ONESIGNAL_APP_ID,
-        // OneSignal v16 auto-manages its service worker file, do not specify serviceWorkerPath
-        allowLocalhostAsSecureOrigin: true,
-        notifyButton: { enable: false },
-        safari_web_id: import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || undefined,
-      })
+      await oneSignal.init(config)
+      console.log('✅ OneSignal initialized with config:', config)
     } catch (initError: any) {
       // OneSignal throws when init is called twice; treat that as non-fatal
       const msg = String(initError || '')
       if (msg.includes('SDK already initialized') || msg.includes('already initialized')) {
-        console.info('OneSignal init skipped: SDK already initialized')
+        console.info('ℹ️ OneSignal init skipped: SDK already initialized')
       } else {
         throw initError
       }

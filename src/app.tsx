@@ -73,19 +73,21 @@ export function App() {
         // Initialize IndexedDB
         await initializeDB();
 
-        // Register Service Worker (both dev and production for testing)
+        // Register Service Workers
         if ("serviceWorker" in navigator) {
           try {
-            console.log("🔧 Registering Service Worker...");
-            const registration = await navigator.serviceWorker.register(
+            console.log("🔧 Registering Service Workers...");
+
+            // Register main service worker for PWA functionality
+            const swRegistration = await navigator.serviceWorker.register(
               "/sw.js",
               {
                 scope: "/",
               }
             );
             console.log(
-              "✅ Service Worker registered successfully:",
-              registration.scope
+              "✅ Main Service Worker registered:",
+              swRegistration.scope
             );
 
             // Wait for service worker to be ready
@@ -93,6 +95,7 @@ export function App() {
             console.log("✅ Service Worker is ready");
 
             // Initialize OneSignal after service worker is ready
+            // OneSignal will register its own service worker (OneSignalSDKWorker.js)
             // Wait a bit to ensure service worker is fully active
             setTimeout(async () => {
               console.log("🔧 Initializing OneSignal...");
@@ -102,19 +105,21 @@ export function App() {
               } else {
                 console.warn("⚠️ OneSignal initialization failed");
               }
-            }, 500);
+            }, 1000); // Increased delay for iOS compatibility
           } catch (error) {
             console.error("❌ SW registration failed:", error);
-            // Try to initialize OneSignal anyway (it may work without custom SW)
+            // Try to initialize OneSignal anyway (it manages its own SW)
             setTimeout(async () => {
-              console.log(
-                "🔧 Attempting OneSignal initialization without custom SW..."
-              );
+              console.log("🔧 Attempting OneSignal initialization...");
               await initializeOneSignal(user?.id);
-            }, 500);
+            }, 1000);
           }
         } else {
           console.warn("⚠️ Service Workers not supported in this browser");
+          // Still try to initialize OneSignal for browsers that support it
+          setTimeout(async () => {
+            await initializeOneSignal(user?.id);
+          }, 500);
         }
       } catch (error) {
         console.error("❌ App initialization failed:", error);

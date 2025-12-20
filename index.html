@@ -2,45 +2,65 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Viewport Configuration -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <!-- Theme Colors -->
     <meta name="theme-color" content="#0f172a" />
+    <meta name="msapplication-TileColor" content="#0f172a" />
+
+    <!-- App Description -->
     <meta
       name="description"
       content="SSA Manager - Auto service appointment management platform"
+    />
+    <meta
+      name="keywords"
+      content="appointments, auto service, SSA, scheduling, business management"
     />
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Mobile App Capable -->
-    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
+    <!-- iOS Specific Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
     <meta name="apple-mobile-web-app-title" content="SSA Manager" />
-    <script
-      src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-      defer
-    ></script>
-    <!-- OneSignal initialization is handled programmatically in `src/lib/notifications.ts` -->
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/icon-192.png" />
 
-    <link rel="manifest" href="public/manifest.json" />
-    <script>
-      navigator.serviceWorker.register("public/sw.js");
-    </script>
-    <script>
-      navigator.serviceWorker.register("public/sw.js");
-    </script>
-    <script>
-      navigator.serviceWorker.register("public/sw.js");
-    </script>
-    <script>
-      navigator.serviceWorker.register("public/sw.js");
-    </script>
+    <!-- iOS Touch Icons -->
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icon-192.png" />
+
+    <!-- iOS Splash Screens - Optional but recommended -->
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
+    <!-- Android/Chrome -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Microsoft -->
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- OneSignal SDK - Loaded programmatically in notifications.ts -->
+    <!-- Service Worker registration handled in app.tsx -->
+
     <title>SSA Manager - Auto Service Appointments</title>
   </head>
   <body>

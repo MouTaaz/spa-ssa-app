@@ -119,18 +119,26 @@ export function generateDeviceName(): string {
 
 /**
  * Register or update a device subscription with multi-device support
+ * Improved version with better error handling and NULL player ID support
  */
 export async function registerDeviceSubscription(
   userId: string,
-  playerId: string,
+  playerId: string | null,
   platform: 'web' | 'ios' | 'android',
   externalUserId?: string
 ): Promise<boolean> {
   try {
-    console.log('📱 Registering device subscription')
+    console.log('📱 [REGISTER] Starting device subscription registration')
     console.log('  User ID:', userId)
-    console.log('  Player ID:', playerId)
+    console.log('  Player ID:', playerId || 'NULL (will retry)')
     console.log('  Platform:', platform)
+    console.log('  External User ID:', externalUserId || userId)
+
+    // Validate required fields
+    if (!userId) {
+      console.error('❌ [REGISTER] User ID is required')
+      return false
+    }
 
     // Detect device characteristics
     const scope = await detectDeviceScope()
@@ -138,10 +146,15 @@ export async function registerDeviceSubscription(
     const deviceName = generateDeviceName()
     const now = new Date().toISOString()
 
+    console.log('📱 [REGISTER] Device characteristics:')
+    console.log('  Scope:', scope)
+    console.log('  Device Type:', deviceType)
+    console.log('  Device Name:', deviceName)
+
     // Prepare subscription data
-    const subscriptionData: DeviceSubscription = {
+    const subscriptionData: any = {
       user_id: userId,
-      onesignal_player_id: playerId,
+      onesignal_player_id: playerId, // Can be NULL initially
       onesignal_external_user_id: externalUserId || userId,
       platform,
       device_type: deviceType,
@@ -151,48 +164,117 @@ export async function registerDeviceSubscription(
       push_active: true,
       last_active_at: now,
       installed_at: now,
+      endpoint: null, // OneSignal doesn't use traditional endpoints
+      p256dh: null,
+      auth: null,
     }
 
-    console.log('📱 Device subscription data:', subscriptionData)
+    console.log('📱 [REGISTER] Subscription data prepared:', {
+      ...subscriptionData,
+      user_agent: subscriptionData.user_agent.substring(0, 50) + '...'
+    })
 
-    // First try upsert by player_id (for existing unique constraint)
-    let { error, data } = await supabase
-      .from('push_subscriptions')
-      .upsert([subscriptionData], {
-        onConflict: 'onesignal_player_id',
-      })
-      .select()
-
-    // If that fails, try upsert by user_id (fallback for different constraint setups)
-    if (error) {
-      console.warn('⚠️ Upsert by player_id failed, trying user_id:', error.message)
-      const { error: fallbackError, data: fallbackData } = await supabase
+    // Strategy 1: If player_id exists, try upsert by player_id
+    if (playerId) {
+      console.log('📱 [REGISTER] Attempting upsert by player_id...')
+      const { error, data } = await supabase
         .from('push_subscriptions')
         .upsert([subscriptionData], {
-          onConflict: 'user_id',
+          onConflict: 'onesignal_player_id',
+          ignoreDuplicates: false,
         })
         .select()
 
-      if (fallbackError) {
-        console.error('❌ Both upsert attempts failed:', fallbackError)
+      if (!error) {
+        console.log('✅ [REGISTER] Successfully registered via player_id upsert')
+        console.log('   Record ID:', data?.[0]?.id)
+        return true
+      }
+
+      console.warn('⚠️ [REGISTER] Upsert by player_id failed:', error.message)
+      console.warn('   Error details:', error)
+    }
+
+    // Strategy 2: Try to find existing subscription by user_id and device_name
+    console.log('📱 [REGISTER] Checking for existing subscription by user_id and device_name...')
+    const { data: existingSubscription, error: findError } = await supabase
+      .from('push_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('device_name', deviceName)
+      .maybeSingle()
+
+    if (findError) {
+      console.warn('⚠️ [REGISTER] Error finding existing subscription:', findError.message)
+    }
+
+    if (existingSubscription) {
+      console.log('📱 [REGISTER] Found existing subscription, updating...')
+      console.log('   Existing ID:', existingSubscription.id)
+      
+      // Update existing subscription
+      const { error: updateError, data: updateData } = await supabase
+        .from('push_subscriptions')
+        .update({
+          onesignal_player_id: playerId,
+          onesignal_external_user_id: externalUserId || userId,
+          platform,
+          device_type: deviceType,
+          scope,
+          user_agent: navigator.userAgent,
+          push_active: true,
+          last_active_at: now,
+        })
+        .eq('id', existingSubscription.id)
+        .select()
+
+      if (updateError) {
+        console.error('❌ [REGISTER] Failed to update existing subscription:', updateError.message)
+        console.error('   Error details:', updateError)
         return false
       }
 
-      error = fallbackError
-      data = fallbackData
+      console.log('✅ [REGISTER] Successfully updated existing subscription')
+      console.log('   Updated record:', updateData?.[0])
+      return true
     }
 
-    if (error) {
-      console.error('❌ Failed to register device subscription:', error)
+    // Strategy 3: Insert new subscription
+    console.log('📱 [REGISTER] No existing subscription found, inserting new...')
+    const { error: insertError, data: insertData } = await supabase
+      .from('push_subscriptions')
+      .insert([subscriptionData])
+      .select()
+
+    if (insertError) {
+      console.error('❌ [REGISTER] Failed to insert new subscription:', insertError.message)
+      console.error('   Error code:', insertError.code)
+      console.error('   Error details:', insertError.details)
+      console.error('   Error hint:', insertError.hint)
+      
+      // Check if it's a unique constraint violation
+      if (insertError.code === '23505') {
+        console.error('   Unique constraint violation detected')
+        console.error('   This might be due to a race condition or duplicate player_id')
+        
+        // Try one more time with a slight delay
+        await new Promise(resolve => setTimeout(resolve, 500))
+        return registerDeviceSubscription(userId, playerId, platform, externalUserId)
+      }
+      
       return false
     }
 
-    console.log('✅ Device subscription registered successfully')
-    console.log('   Data:', data)
+    console.log('✅ [REGISTER] Successfully inserted new subscription')
+    console.log('   New record ID:', insertData?.[0]?.id)
+    console.log('   New record:', insertData?.[0])
 
     return true
-  } catch (error) {
-    console.error('❌ Error registering device subscription:', error)
+  } catch (error: any) {
+    console.error('❌ [REGISTER] Unexpected error during registration:', error)
+    console.error('   Error name:', error?.name)
+    console.error('   Error message:', error?.message)
+    console.error('   Error stack:', error?.stack)
     return false
   }
 }

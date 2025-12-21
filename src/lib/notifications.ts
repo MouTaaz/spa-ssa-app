@@ -358,69 +358,103 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
 
 export async function saveOneSignalSubscription(userId: string): Promise<boolean> {
   try {
-    console.log('🔍 DEBUG: Save OneSignal Subscription')
-    console.log('userId:', userId)
-    console.log('Platform:', getPlatform())
+    console.log('🔍 [SAVE] Starting OneSignal subscription save process')
+    console.log('  User ID:', userId)
+    console.log('  Platform:', getPlatform())
+    console.log('  Timestamp:', new Date().toISOString())
 
     const oneSignal = await loadOneSignal()
 
-    // Use improved waitForPlayerId function
-    const playerId = await waitForPlayerId(15, 800)
+    // Use improved waitForPlayerId function with extended retries
+    console.log('🔍 [SAVE] Waiting for OneSignal Player ID...')
+    const playerId = await waitForPlayerId(20, 1000) // Increased attempts and delay
 
     if (!playerId) {
-      console.error('❌ OneSignal Player ID not available after retries')
+      console.error('❌ [SAVE] OneSignal Player ID not available after retries')
       console.error('   This may indicate OneSignal SDK issues')
       console.error('   Possible causes:')
       console.error('   - OneSignal not fully initialized')
       console.error('   - User not subscribed to push notifications')
       console.error('   - Service worker not registered properly')
+      console.error('   - Network issues preventing OneSignal communication')
+      
+      // Try to register with NULL player ID (will be updated later)
+      console.log('🔍 [SAVE] Attempting to register with NULL player ID for later update...')
+      const platform = getPlatform()
+      const success = await registerDeviceSubscription(userId, null, platform as any, userId)
+      
+      if (success) {
+        console.log('✅ [SAVE] Registered subscription with NULL player ID - will retry later')
+        return true
+      }
+      
       return false
     }
 
-    console.log('✅ Got OneSignal Player ID:', playerId)
+    console.log('✅ [SAVE] Got OneSignal Player ID:', playerId)
 
     // Get the actual external user ID from OneSignal instead of assuming it's the userId
     let externalUserId: string | null = null
     try {
+      console.log('🔍 [SAVE] Attempting to get external user ID from OneSignal...')
+      
       if (typeof oneSignal.getExternalUserId === 'function') {
         externalUserId = await oneSignal.getExternalUserId()
-        console.log('🔍 DEBUG: Got external user ID from OneSignal:', externalUserId)
+        console.log('🔍 [SAVE] Got external user ID from getExternalUserId():', externalUserId)
       } else if (oneSignal.User && typeof oneSignal.User.getExternalUserId === 'function') {
         externalUserId = await oneSignal.User.getExternalUserId()
-        console.log('🔍 DEBUG: Got external user ID from OneSignal.User:', externalUserId)
+        console.log('🔍 [SAVE] Got external user ID from User.getExternalUserId():', externalUserId)
+      } else {
+        console.log('🔍 [SAVE] No getExternalUserId method available')
       }
     } catch (e) {
-      console.warn('Failed to get external user ID from OneSignal:', e)
+      console.warn('⚠️ [SAVE] Failed to get external user ID from OneSignal:', e)
     }
 
     // Fallback to userId if we can't get it from OneSignal
     if (!externalUserId) {
       externalUserId = userId
-      console.log('🔍 DEBUG: Using userId as external user ID fallback:', externalUserId)
+      console.log('🔍 [SAVE] Using userId as external user ID fallback:', externalUserId)
     }
 
     // Use the new multi-device registration system
     const platform = getPlatform()
-    console.log('🔍 DEBUG: Calling registerDeviceSubscription with platform:', platform)
+    console.log('🔍 [SAVE] Calling registerDeviceSubscription...')
+    console.log('  User ID:', userId)
+    console.log('  Player ID:', playerId)
+    console.log('  Platform:', platform)
+    console.log('  External User ID:', externalUserId)
+    
     const success = await registerDeviceSubscription(userId, playerId, platform as any, externalUserId)
 
     if (!success) {
-      console.error("❌ Failed to register device subscription")
+      console.error("❌ [SAVE] Failed to register device subscription")
       console.error("   Check database constraints and RLS policies")
+      console.error("   Check browser console for detailed error messages")
       return false
     }
 
+    console.log('✅ [SAVE] Device subscription registered successfully')
+
     // Update last active timestamp
+    console.log('🔍 [SAVE] Updating last active timestamp...')
     await updateDeviceLastActive(playerId)
 
     // Cleanup any stale subscriptions
+    console.log('🔍 [SAVE] Cleaning up inactive subscriptions...')
     await cleanupInactiveSubscriptions(userId)
 
-    console.log("✅ OneSignal subscription saved with multi-device support")
+    console.log("✅ [SAVE] OneSignal subscription saved with multi-device support")
+    console.log("   Player ID:", playerId)
+    console.log("   Platform:", platform)
+    console.log("   Timestamp:", new Date().toISOString())
+    
     return true
-  } catch (error) {
-    console.error("❌ Error saving OneSignal subscription:", error)
-    console.error("   Stack:", error instanceof Error ? error.stack : 'No stack available')
+  } catch (error: any) {
+    console.error("❌ [SAVE] Error saving OneSignal subscription:", error)
+    console.error("   Error name:", error?.name)
+    console.error("   Error message:", error?.message)
+    console.error("   Error stack:", error?.stack)
     return false
   }
 }

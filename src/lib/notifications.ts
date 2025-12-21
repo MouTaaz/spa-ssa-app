@@ -142,10 +142,18 @@ export async function initializeOneSignal(userId?: string) {
       }
     }
 
-    // Set external user ID if user is logged in
+    // CRITICAL: Set external user ID IMMEDIATELY after init, BEFORE any subscription
+    // This ensures that when the user subscribes, OneSignal links the subscription
+    // to the external user ID, allowing notifications to be sent correctly
     if (userId) {
-      console.log('🔍 DEBUG: Setting external user ID')
-      await oneSignal.login(userId)
+      console.log('🔍 DEBUG: Setting external user ID BEFORE subscription')
+      try {
+        await oneSignal.login(userId)
+        console.log('✅ External user ID set successfully:', userId)
+      } catch (loginError) {
+        console.error('❌ Failed to set external user ID:', loginError)
+        // Continue anyway, but log the error
+      }
     }
 
     // Listen for subscription changes to save to DB automatically (if method exists)
@@ -296,6 +304,16 @@ export async function requestNotificationPermission() {
 export async function subscribeToPushNotifications(userId: string): Promise<boolean> {
   try {
     const oneSignal = await loadOneSignal()
+
+    // CRITICAL: Ensure external user ID is set BEFORE subscription
+    console.log('🔍 [SUBSCRIBE] Ensuring external user ID is set before subscription')
+    try {
+      await oneSignal.login(userId)
+      console.log('✅ [SUBSCRIBE] External user ID confirmed:', userId)
+    } catch (loginError) {
+      console.warn('⚠️ [SUBSCRIBE] Failed to set external user ID:', loginError)
+      // Continue anyway, but this may cause notification delivery issues
+    }
 
     // Request notification permission
     const permissionGranted = await requestNotificationPermission()

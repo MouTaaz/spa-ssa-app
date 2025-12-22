@@ -218,11 +218,20 @@ export async function initializeOneSignal(userId?: string) {
 
 /**
  * Wait for OneSignal Player ID to be available with exponential backoff
+ * iOS-optimized with longer wait times and more attempts
  */
-async function waitForPlayerId(maxAttempts: number = 15, initialDelay: number = 800): Promise<string | null> {
+async function waitForPlayerId(maxAttempts?: number, initialDelay?: number): Promise<string | null> {
   const oneSignal = await loadOneSignal()
+  const platform = getPlatform()
+  
+  // iOS-specific configuration: longer waits and more attempts
+  const attempts = maxAttempts || (platform === 'ios' ? 30 : 15)
+  const delay = initialDelay || (platform === 'ios' ? 1500 : 800)
+  
+  console.log(`🔍 [WAIT_PLAYER_ID] Starting wait for Player ID on ${platform}`)
+  console.log(`   Max attempts: ${attempts}, Initial delay: ${delay}ms`)
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       // Try to get player ID using multiple methods
       let playerId: string | null | undefined = undefined
@@ -258,29 +267,89 @@ async function waitForPlayerId(maxAttempts: number = 15, initialDelay: number = 
       }
 
       if (playerId && playerId.trim() !== '') {
-        console.log(`✅ Player ID retrieved after ${attempt} attempt(s):`, playerId)
+        console.log(`✅ [WAIT_PLAYER_ID] Player ID retrieved after ${attempt} attempt(s):`, playerId)
         return playerId
       }
 
-      console.log(`⏳ Player ID not available yet (attempt ${attempt}/${maxAttempts})`)
+      console.log(`⏳ [WAIT_PLAYER_ID] Player ID not available yet (attempt ${attempt}/${attempts})`)
 
       // Exponential backoff: wait longer each time
-      if (attempt < maxAttempts) {
-        const delay = Math.min(initialDelay * Math.pow(1.5, attempt - 1), 5000) // Cap at 5 seconds
-        console.log(`   Waiting ${delay}ms before retry...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
+      if (attempt < attempts) {
+        const waitTime = Math.min(delay * Math.pow(1.5, attempt - 1), 8000) // Cap at 8 seconds for iOS
+        console.log(`   Waiting ${Math.round(waitTime)}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
       }
     } catch (error) {
-      console.warn(`⚠️ Error checking player ID on attempt ${attempt}:`, error)
-      if (attempt < maxAttempts) {
-        const delay = Math.min(initialDelay * Math.pow(1.5, attempt - 1), 5000)
-        await new Promise(resolve => setTimeout(resolve, delay))
+      console.warn(`⚠️ [WAIT_PLAYER_ID] Error checking player ID on attempt ${attempt}:`, error)
+      if (attempt < attempts) {
+        const waitTime = Math.min(delay * Math.pow(1.5, attempt - 1), 8000)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
       }
     }
   }
 
-  console.error('❌ Player ID not available after maximum attempts')
+  console.error(`❌ [WAIT_PLAYER_ID] Player ID not available after ${attempts} attempts`)
   return null
+}
+
+/**
+ * Background retry mechanism for updating NULL player IDs
+ * Runs periodically to check if Player ID becomes available
+ */
+async function startBackgroundPlayerIdRetry(userId: string, maxRetries: number = 24): Promise<void> {
+  const platform = getPlatform()
+  
+  if (platform !== 'ios') {
+    console.log('🔍 [BACKGROUND_RETRY] Skipping background retry (not iOS)')
+    return
+  }
+
+  console.log(`🔍 [BACKGROUND_RETRY] Starting background retry for user ${userId}`)
+  console.log(`   Will retry every 5 seconds for up to ${maxRetries} attempts (2 minutes)`)
+
+  let retryCount = 0
+  const retryInterval = setInterval(async () => {
+    retryCount++
+    console.log(`🔍 [BACKGROUND_RETRY] Attempt ${retryCount}/${maxRetries}`)
+
+    try {
+      const oneSignal = await loadOneSignal()
+      
+      // Try to get player ID
+      let playerId: string | null = null
+      
+      if (typeof oneSignal.getUserId === 'function') {
+        playerId = await oneSignal.getUserId()
+      } else if (oneSignal.User && oneSignal.User.PushSubscription) {
+        playerId = await oneSignal.User.PushSubscription.id
+      }
+
+      if (playerId && playerId.trim() !== '') {
+        console.log(`✅ [BACKGROUND_RETRY] Player ID found: ${playerId}`)
+        
+        // Update the database record
+        const success = await saveOneSignalSubscription(userId)
+        
+        if (success) {
+          console.log('✅ [BACKGROUND_RETRY] Successfully updated subscription with Player ID')
+          clearInterval(retryInterval)
+          return
+        }
+      }
+
+      // Stop after max retries
+      if (retryCount >= maxRetries) {
+        console.warn(`⚠️ [BACKGROUND_RETRY] Max retries reached without finding Player ID`)
+        clearInterval(retryInterval)
+      }
+    } catch (error) {
+      console.error(`❌ [BACKGROUND_RETRY] Error during retry ${retryCount}:`, error)
+      
+      if (retryCount >= maxRetries) {
+        clearInterval(retryInterval)
+      }
+    }
+  }, 5000) // Retry every 5 seconds
 }
 
 export async function requestNotificationPermission() {
@@ -331,7 +400,7 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
       console.log("Mobile: Permission granted, bell should appear for subscription")
 
       // Wait for player ID to be available with improved retry logic
-      const playerId = await waitForPlayerId(15, 800) // 15 attempts, starting at 800ms
+      const playerId = await waitForPlayerId() // Use platform-specific defaults
 
       if (playerId) {
         // Try to save subscription now that player ID is available
@@ -340,10 +409,17 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
           console.log("Mobile: Subscription saved successfully")
           return true
         }
+      } else {
+        // Player ID not available yet - start background retry for iOS
+        if (platform === 'ios') {
+          console.log("iOS: Starting background retry mechanism")
+          startBackgroundPlayerIdRetry(userId)
+        }
       }
 
       // If not saved immediately, it will be saved when subscription change event fires
-      console.log("Mobile: Subscription may be saved via event listener")
+      // or via background retry mechanism
+      console.log("Mobile: Subscription may be saved via event listener or background retry")
       return true
     } else {
       // Desktop: Use Slidedown for subscription

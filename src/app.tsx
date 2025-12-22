@@ -97,15 +97,23 @@ export function App() {
             // Initialize OneSignal after service worker is ready
             // OneSignal will register its own service worker (OneSignalSDKWorker.js)
             // Wait a bit to ensure service worker is fully active
+            // iOS needs more time for proper initialization
+            const platform = /iphone|ipad|ipod/i.test(navigator.userAgent)
+              ? "ios"
+              : "other";
+            const initDelay = platform === "ios" ? 2000 : 1000;
+
             setTimeout(async () => {
-              console.log("🔧 Initializing OneSignal...");
+              console.log(
+                `🔧 Initializing OneSignal (${platform}, delay: ${initDelay}ms)...`
+              );
               const initialized = await initializeOneSignal(user?.id);
               if (initialized) {
                 console.log("✅ OneSignal initialized successfully");
               } else {
                 console.warn("⚠️ OneSignal initialization failed");
               }
-            }, 1000); // Increased delay for iOS compatibility
+            }, initDelay); // iOS: 2000ms, Others: 1000ms
           } catch (error) {
             console.error("❌ SW registration failed:", error);
             // Try to initialize OneSignal anyway (it manages its own SW)

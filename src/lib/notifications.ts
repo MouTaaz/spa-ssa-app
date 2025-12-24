@@ -66,7 +66,7 @@ async function loadOneSignal() {
 
 // OneSignal App ID - should be set as environment variable
 const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || 'your-onesignal-app-id'
-const ONESIGNAL_SAFARI_WEB_ID = import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID
+const ONESIGNAL_SAFARI_WEB_ID = import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || 'web.onesignal.auto.67fef31a-7360-4fd8-9645-1463ac233cef'
 
 export async function initializeOneSignal(userId?: string) {
   try {
@@ -374,14 +374,17 @@ export async function subscribeToPushNotifications(userId: string): Promise<bool
   try {
     const oneSignal = await loadOneSignal()
 
-    // CRITICAL: Ensure external user ID is set BEFORE subscription
-    console.log('🔍 [SUBSCRIBE] Ensuring external user ID is set before subscription')
+    // CRITICAL FIX: Set external user ID IMMEDIATELY BEFORE any subscription logic
+    // This ensures OneSignal links the subscription to the correct external user ID
+    console.log('🔍 [SUBSCRIBE] Setting external user ID BEFORE subscription')
     try {
       await oneSignal.login(userId)
-      console.log('✅ [SUBSCRIBE] External user ID confirmed:', userId)
+      console.log('✅ [SUBSCRIBE] External user ID set successfully:', userId)
     } catch (loginError) {
-      console.warn('⚠️ [SUBSCRIBE] Failed to set external user ID:', loginError)
-      // Continue anyway, but this may cause notification delivery issues
+      console.error('❌ [SUBSCRIBE] CRITICAL: Failed to set external user ID:', loginError)
+      console.error('   This will cause notification delivery to fail!')
+      // Don't continue if we can't set the external user ID
+      return false
     }
 
     // Request notification permission

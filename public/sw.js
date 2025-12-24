@@ -1,6 +1,7 @@
 // SSA Manager Service Worker
 // Compatible with OneSignal Push Notifications
 // Uses Workbox for precaching and runtime caching
+// NOTE: OneSignal SDK is NOT imported here - OneSignal manages its own service worker (OneSignalSDKWorker.js)
 
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";

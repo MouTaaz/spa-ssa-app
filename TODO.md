@@ -9,6 +9,7 @@
 - [x] Update vite.config.ts for proper PWA generation
 - [x] Fix service worker registration in app.tsx
 - [x] Update sw.js for OneSignal compatibility
+- [x] **FIXED**: Remove OneSignal SDK import from custom service worker to prevent scope conflicts
 
 ### Phase 2: OneSignal iOS Enhancement ✅
 

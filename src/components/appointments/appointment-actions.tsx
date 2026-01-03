@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase, createAppointmentHistoryEntry } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AlertCircle, Loader } from "lucide-react";
@@ -33,6 +34,12 @@ export function AppointmentActions({
     setError(null);
 
     try {
+      // Validate user is authenticated
+      const currentUser = user || useAppStore.getState().user;
+      if (!currentUser?.id) {
+        throw new Error("User not authenticated. Please log in again.");
+      }
+
       // Create history entry for status change
       await createAppointmentHistoryEntry(
         appointment.external_id,
@@ -40,7 +47,7 @@ export function AppointmentActions({
         "user",
         { status: appointment.status },
         { status: newStatus },
-        useAppStore.getState().user?.id,
+        currentUser.id,
         `Status changed from ${appointment.status} to ${newStatus}`
       );
 

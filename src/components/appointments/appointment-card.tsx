@@ -18,6 +18,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
+import { getESTDate } from "@/lib/timezone";
 
 interface AppointmentCardProps {
   appointment: Appointment;
@@ -41,8 +42,8 @@ export function AppointmentCard({
     EDITED: "bg-blue-100 text-blue-800 border-purple-300",
   };
 
-  const startDate = new Date(appointment.start_time);
-  const endDate = new Date(appointment.end_time);
+  const startDate = getESTDate(appointment.start_time);
+  const endDate = getESTDate(appointment.end_time);
 
   const hasRescheduleHistory = appointment.previous_appointment;
 

@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Clock, CheckCircle, XCircle, RotateCcw, Edit } from "lucide-react";
+import { getESTDate } from "@/lib/timezone";
 
 interface AppointmentTimelineProps {
   appointments: Appointment[];
@@ -15,7 +16,7 @@ export function AppointmentTimeline({
     .filter((a) => a.status !== "CANCELLED")
     .sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        getESTDate(a.start_time).getTime() - getESTDate(b.start_time).getTime()
     )
     .slice(0, 5);
 
@@ -76,7 +77,7 @@ export function AppointmentTimeline({
       ) : (
         <div className="space-y-3">
           {upcomingAppointments.map((apt) => {
-            const startDate = new Date(apt.start_time);
+            const startDate = getESTDate(apt.start_time);
             return (
               <div
                 key={apt.id}

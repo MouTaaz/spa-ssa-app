@@ -29,6 +29,7 @@ import {
   isWithinInterval,
   isSameDay,
 } from "date-fns";
+import { getESTDate } from "@/lib/timezone";
 
 interface AppointmentFormProps {
   onClose: () => void;
@@ -218,24 +219,24 @@ export function AppointmentForm({ onClose, onSuccess }: AppointmentFormProps) {
           const utcEnd = parseISO(
             appointment.end_time.replace(" ", "T").replace("+00", "Z")
           );
-          // UTC times are already converted to local time by parseISO
-          const localStart = utcStart;
-          const localEnd = utcEnd;
-          console.log("Appointment parsed (local):", localStart, localEnd);
+          // Convert to EST for proper date comparison
+          const estStart = getESTDate(appointment.start_time);
+          const estEnd = getESTDate(appointment.end_time);
+          console.log("Appointment parsed (EST):", estStart, estEnd);
           console.log("Slot local:", currentSlot, "Slot end local:", slotEnd);
           console.log(
             "Selected date:",
             selectedDate,
             "Appointment date:",
-            format(localStart, "yyyy-MM-dd")
+            format(estStart, "yyyy-MM-dd")
           );
 
           // Check if the slot overlaps with the appointment
-          const dateMatches = format(localStart, "yyyy-MM-dd") === selectedDate;
+          const dateMatches = format(estStart, "yyyy-MM-dd") === selectedDate;
 
           // Standard interval overlap: slot overlaps if slot.start < appointment.end AND slot.end > appointment.start
           const overlaps =
-            dateMatches && currentSlot < localEnd && slotEnd > localStart;
+            dateMatches && currentSlot < estEnd && slotEnd > estStart;
 
           return overlaps;
         } catch (error) {
@@ -282,15 +283,15 @@ export function AppointmentForm({ onClose, onSuccess }: AppointmentFormProps) {
     }
 
     // Validate for overlapping appointments before creation
-    const newAppointmentStart = new Date(formData.start_time);
-    const newAppointmentEnd = new Date(formData.end_time);
+    const newAppointmentStart = getESTDate(formData.start_time);
+    const newAppointmentEnd = getESTDate(formData.end_time);
 
     const hasOverlap = appointments.some((appointment) => {
       if (appointment.status !== "BOOKED" && appointment.status !== "CONFIRMED")
         return false;
 
-      const appointmentStart = new Date(appointment.start_time);
-      const appointmentEnd = new Date(appointment.end_time);
+      const appointmentStart = getESTDate(appointment.start_time);
+      const appointmentEnd = getESTDate(appointment.end_time);
 
       // Check if the new appointment overlaps with existing ones
       return (
@@ -384,7 +385,7 @@ export function AppointmentForm({ onClose, onSuccess }: AppointmentFormProps) {
       ) {
         return false;
       }
-      return format(new Date(appointment.start_time), "yyyy-MM-dd") === date;
+      return format(getESTDate(appointment.start_time), "yyyy-MM-dd") === date;
     }).length;
   };
 

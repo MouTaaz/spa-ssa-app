@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { format, differenceInMinutes } from "date-fns";
 import { useAppStore } from "@/lib/store";
+import { getESTDate, getESTTimeString, getESTDateString } from "@/lib/timezone";
 
 interface AppointmentDetailProps {
   appointment: Appointment;
@@ -134,11 +135,11 @@ const AppointmentDetail = React.memo(function AppointmentDetail({
   }, [handleKeyDown]);
 
   const startDate = useMemo(
-    () => new Date(appointment.start_time),
+    () => getESTDate(appointment.start_time),
     [appointment.start_time]
   );
   const endDate = useMemo(
-    () => new Date(appointment.end_time),
+    () => getESTDate(appointment.end_time),
     [appointment.end_time]
   );
   const duration = useMemo(

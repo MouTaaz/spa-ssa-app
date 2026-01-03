@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { getESTDate } from "@/lib/timezone";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -30,7 +31,7 @@ export function DashboardPage() {
   // Get recent appointments (next 7 days)
   const recentAppointments = appointments
     .filter((apt) => {
-      const aptDate = new Date(apt.start_time);
+      const aptDate = getESTDate(apt.start_time);
       const now = new Date();
       const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       return (
@@ -39,13 +40,13 @@ export function DashboardPage() {
     })
     .sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        getESTDate(a.start_time).getTime() - getESTDate(b.start_time).getTime()
     )
     .slice(0, 5);
 
   // Get today's appointments
   const todayAppointments = appointments.filter((apt) => {
-    const aptDate = format(new Date(apt.start_time), "yyyy-MM-dd");
+    const aptDate = format(getESTDate(apt.start_time), "yyyy-MM-dd");
     const today = format(new Date(), "yyyy-MM-dd");
     return aptDate === today && apt.status !== "CANCELLED";
   });
@@ -138,8 +139,8 @@ export function DashboardPage() {
                           {appointment.customer_name}
                         </p>
                         <p className="text-sm text-slate-600">
-                          {format(new Date(appointment.start_time), "h:mm a")} -{" "}
-                          {appointment.service_name}
+                          {format(getESTDate(appointment.start_time), "h:mm a")}{" "}
+                          - {appointment.service_name}
                         </p>
                       </div>
                       <Badge variant="outline">

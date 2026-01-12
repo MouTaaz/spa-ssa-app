@@ -176,7 +176,8 @@ export interface Appointment {
     | "CANCELLED"
     | "RESCHEDULED"
     | "COMPLETED"
-    | "CONFIRMED";
+    | "CONFIRMED"
+    | "EDITED";
   display_status?: "RESCHEDULED" | "EDITED";
   cancellation_type?: "reschedule" | "final";
   vehicle_make_model?: string;

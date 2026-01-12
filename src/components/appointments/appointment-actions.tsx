@@ -179,7 +179,7 @@ export function AppointmentActions({
             disabled={loading}
             variant={action.variant}
             size="sm"
-            className=""
+            className={action.label === "Cancel" ? "text-black" : ""}
           >
             {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
             {action.label}

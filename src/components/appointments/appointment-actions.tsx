@@ -128,7 +128,7 @@ export function AppointmentActions({
       {
         label: "Cancel",
         action: handleCancel,
-        variant: "destructive" as const,
+        variant: "outline" as const,
       },
     ],
     CONFIRMED: [

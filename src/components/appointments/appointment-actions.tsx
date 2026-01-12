@@ -108,7 +108,7 @@ export function AppointmentActions({
           ),
         variant: "outline" as const,
       },
-      { label: "Confirm", action: handleConfirm, variant: "default" as const },
+      { label: "Confirm", action: handleConfirm, variant: "outline" as const },
       {
         label: "Cancel",
         action: handleCancel,
